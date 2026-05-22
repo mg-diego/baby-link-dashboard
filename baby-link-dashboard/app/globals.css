@@ -1,0 +1,27 @@
+@import "tailwindcss";
+
+@theme {
+  /* Paleta de colores — genera utilidades: bg-primary, text-on-surface, etc. */
+  --color-primary:           #7BB8F0;
+  --color-on-primary:        #0C447C;
+  --color-primary-container: #1A2B45;
+  --color-secondary:         #B8A0E8;
+  --color-surface:           #1A1D2E;
+  --color-on-surface:        #E8EAF6;
+  --color-surface-container: #242746;
+  --color-background:        #0F1222;
+  --color-outline:           #2E3250;
+  --color-error:             #F09595;
+
+  /* Tipografías */
+  --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
+  --font-mono: var(--font-geist-mono);
+}
+
+@layer base {
+  body {
+    background-color: var(--color-background);
+    color: var(--color-on-surface);
+    font-family: var(--font-sans);
+  }
+}
