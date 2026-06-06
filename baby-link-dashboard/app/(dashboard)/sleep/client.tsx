@@ -4,9 +4,9 @@ import {
   AreaChart, Area, LineChart, Line, BarChart, Bar,
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
-  ComposedChart
+  ComposedChart, Rectangle
 } from 'recharts'
-import { Moon, Clock, Sunrise, BellRing } from 'lucide-react'
+import { Moon, Clock, Sunrise, BellRing, Target, Sparkles } from 'lucide-react'
 import { SleepStats, GanttEntry } from './data'
 import { DashboardSection, ChartTooltip, C } from '@/components/dashboard-section'
 
@@ -103,18 +103,20 @@ function SleepGantt({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] })
 
 export default function SleepClient({ stats }: { stats: SleepStats }) {
   const { kpis, ganttByDate, dailySleep, wakeUpTimes, bedTimes,
-          napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter, cursedHour } = stats
+          napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter, cursedHour, predictions } = stats
 
-  const napRanks = [...new Set(napRaw.map(n => n.napRank))]
-  const napByDate = napRaw.reduce<Record<string, Record<string, number>>>((acc, n) => {
+  const safePredictions = predictions || { bedtime: [], naps: [] }
+
+  const napRanks = [...new Set(napRaw.map((n: any) => n.napRank))]
+  const napByDate = napRaw.reduce<Record<string, Record<string, number>>>((acc: any, n: any) => {
     if (!acc[n.date]) acc[n.date] = {}
     acc[n.date][n.napRank] = n.durationHours
     return acc
   }, {})
-  const napStackData = Object.entries(napByDate).map(([date, naps]) => ({ date, ...naps }))
+  const napStackData = Object.entries(napByDate).map(([date, naps]) => ({ date, ...(naps as any) }))
 
   const NAP_COLORS = ['#B8A0E8','#9B7FDB','#7B5FC4','#5C40A0','#3D2280']
-  const maxCursed = Math.max(...cursedHour.map(h => h.count))
+  const maxCursed = Math.max(...cursedHour.map((h: any) => h.count))
 
   const kpiData = [
     { icon: Moon, label: "Sueño total promedio", value: kpis.avgTotalSleep },
@@ -165,7 +167,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 <Tooltip content={<ChartTooltip formatter={(_: any, __: any, p: any) => p?.payload?.timeStr} />} />
                 <Line type="monotone" dataKey="hourDecimal" name="Despertar" stroke="#FFB74D" strokeWidth={2}
                   dot={{ fill: '#FFB74D', r: 3 }} />
-                <ReferenceLine y={wakeUpTimes.reduce((s,w)=>s+w.hourDecimal,0)/Math.max(wakeUpTimes.length,1)}
+                <ReferenceLine y={wakeUpTimes.reduce((s:number,w:any)=>s+w.hourDecimal,0)/Math.max(wakeUpTimes.length,1)}
                   stroke={C.muted} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
@@ -182,7 +184,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 <Tooltip content={<ChartTooltip formatter={(_: any, __: any, p: any) => p?.payload?.timeStr} />} />
                 <Line dataKey="hourDecimal" name="Hora dormir" stroke={C.error} strokeWidth={2}
                   dot={{ fill: C.error, r: 3 }} />
-                <ReferenceLine y={bedTimes.reduce((s,b)=>s+b.hourDecimal,0)/Math.max(bedTimes.length,1)}
+                <ReferenceLine y={bedTimes.reduce((s:number,b:any)=>s+b.hourDecimal,0)/Math.max(bedTimes.length,1)}
                   stroke={C.muted} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
@@ -203,7 +205,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}h`} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(2)}h`} />} />
                 <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
-                {napRanks.map((rank, i) => (
+                {napRanks.map((rank: any, i: number) => (
                   <Bar key={rank} dataKey={rank} stackId="a" fill={NAP_COLORS[i % NAP_COLORS.length]} radius={i === napRanks.length - 1 ? [4,4,0,0] : undefined} />
                 ))}
               </BarChart>
@@ -231,11 +233,11 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                     )
                   }}
                 />
-                {[...new Set(wakeWindows.map(w => w.windowName))].map((name, i) => (
+                {[...new Set(wakeWindows.map((w: any) => w.windowName))].map((name: any, i: number) => (
                   <Scatter
                     key={name}
                     name={name}
-                    data={wakeWindows.filter(w => w.windowName === name)}
+                    data={wakeWindows.filter((w: any) => w.windowName === name)}
                     fill={NAP_COLORS[i % NAP_COLORS.length]}
                   />
                 ))}
@@ -287,7 +289,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   }}
                 />
                 <Scatter
-                  data={nightWakingScatter.map(d => ({
+                  data={nightWakingScatter.map((d: any) => ({
                     ...d,
                     hourDecimal: d.hourDecimal < 18 ? d.hourDecimal + 24 : d.hourDecimal
                   }))}
@@ -309,7 +311,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} veces`} />} />
                 <Bar dataKey="count" name="Despertares" radius={[3,3,0,0]}>
-                  {cursedHour.map((entry, i) => (
+                  {cursedHour.map((entry: any, i: number) => (
                     <Cell
                       key={i}
                       fill={C.error}
@@ -322,6 +324,142 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           </div>
         </div>
       )
+    },
+    {
+      label: '✨ Predicciones',
+      content: (() => {
+        const BEDTIME_MARGIN = 15;
+        const NAP_MARGIN = 15;
+
+        let bedtimeAvgErrorStr = "--";
+        if (safePredictions.bedtime.length > 0) {
+          const totalError = safePredictions.bedtime.reduce((acc: number, p: any) => acc + Math.abs(p.errorMinutes), 0);
+          bedtimeAvgErrorStr = `${Math.round(totalError / safePredictions.bedtime.length)} min`;
+        }
+
+        let napStartAvgErrorStr = "--";
+        if (safePredictions.naps.length > 0) {
+          const totalError = safePredictions.naps.reduce((acc: number, p: any) => acc + Math.abs(p.errorStartMinutes), 0);
+          napStartAvgErrorStr = `${Math.round(totalError / safePredictions.naps.length)} min`;
+        }
+
+        let napDurAvgErrorStr = "--";
+        if (safePredictions.naps.length > 0) {
+          const totalError = safePredictions.naps.reduce((acc: number, p: any) => acc + Math.abs(p.realDuration - p.predDuration), 0);
+          napDurAvgErrorStr = `${Math.round(totalError / safePredictions.naps.length)} min`;
+        }
+
+        const napStartChartData = safePredictions.naps.map((n: any) => ({
+          ...n,
+          uniqueLabel: `${n.date} - ${n.timeStr}`
+        }));
+
+        return (
+          <div className="space-y-8 animate-in fade-in duration-500">
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+                <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-lg shrink-0">
+                  <Moon size={24} />
+                </div>
+                <div>
+                  <p className="text-xs text-onSurface/60">Desfase Medio Bedtime</p>
+                  <p className="text-2xl font-bold text-onSurface">{bedtimeAvgErrorStr}</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+                <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-lg shrink-0">
+                  <Target size={24} />
+                </div>
+                <div>
+                  <p className="text-xs text-onSurface/60">Desfase Medio Inicio Siestas</p>
+                  <p className="text-2xl font-bold text-onSurface">{napStartAvgErrorStr}</p>
+                </div>
+              </div>
+
+              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+                <div className="p-3 bg-amber-500/20 text-amber-400 rounded-lg shrink-0">
+                  <Sparkles size={24} />
+                </div>
+                <div>
+                  <p className="text-xs text-onSurface/60">Desfase Medio Duración</p>
+                  <p className="text-2xl font-bold text-onSurface">{napDurAvgErrorStr}</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-onSurface mb-1">Desviación: Hora de Dormir (Bedtime)</h3>
+              <p className="text-xs text-onSurface/40 mb-3">
+                Minutos de error. Arriba del 0 = durmió más tarde de lo predicho.
+              </p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={safePredictions.bedtime}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
+                  <XAxis dataKey="date" type="category" tick={TICK_STYLE} />
+                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                  <ReferenceLine y={0} stroke={C.muted} />
+                  <Bar 
+                    dataKey="errorMinutes" 
+                    name="Desviación"
+                    shape={(props: any) => {
+                      const err = Math.abs(props.payload.errorMinutes);
+                      const color = err <= BEDTIME_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
+                      return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-onSurface mb-1">Desviación: Hora de Inicio de Siestas</h3>
+              <p className="text-xs text-onSurface/40 mb-3">
+                Error en la hora a la que realmente se durmió vs la predicción.
+              </p>
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart data={napStartChartData}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
+                  <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
+                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                  <ReferenceLine y={0} stroke={C.muted} />
+                  <Bar 
+                    dataKey="errorStartMinutes" 
+                    name="Desviación de Inicio"
+                    shape={(props: any) => {
+                      const err = Math.abs(props.payload.errorStartMinutes);
+                      const color = err <= NAP_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
+                      return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
+                    }}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium text-onSurface mb-1">Estimación: Duración de Siestas</h3>
+              <p className="text-xs text-onSurface/40 mb-3">
+                Comparativa de minutos reales vs los estimados por la IA.
+              </p>
+              <ResponsiveContainer width="100%" height={280}>
+                <ComposedChart data={napStartChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
+                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                  <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
+                  <Bar dataKey="realDuration" name="Duración Real" fill={C.secondary} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                  <Line type="monotone" dataKey="predDuration" name="Estimación IA" stroke="#FFB74D" strokeWidth={3} dot={{ r: 4, fill: '#FFB74D' }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+            
+          </div>
+        );
+      })()
     }
   ]
 

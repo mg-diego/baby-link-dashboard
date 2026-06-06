@@ -46,6 +46,17 @@ export interface SleepStats {
   nightWakingsByDay: { date: string; totalMin: number; count: number }[]
   nightWakingScatter: { date: string; hourDecimal: number; durationMin: number; timeStr: string; durationStr: string }[]
   cursedHour: { hour: string; count: number }[]
+  predictions: {
+    bedtime: { date: string; errorMinutes: number }[]
+    naps: { 
+      id: string
+      date: string
+      timeStr: string
+      realDuration: number
+      predDuration: number
+      errorStartMinutes: number 
+    }[]
+  }
 }
 
 function splitAtMidnight(
@@ -108,16 +119,58 @@ export async function getSleepStats(
   if (error) throw new Error(error.message)
   if (!events || events.length === 0) return null
 
-  const parsed = events.map(e => ({
-    ...e,
-    startDate: new Date(e.start_time),
-    endDate:   e.end_time ? new Date(e.end_time) : null,
-  }))
+  const parsed = events.map(e => {
+    let meta: any = {}
+    try { meta = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}) } catch {}
+    return {
+      ...e,
+      metadata: meta,
+      startDate: new Date(e.start_time),
+      endDate:   e.end_time ? new Date(e.end_time) : null,
+    }
+  })
 
   const naps         = parsed.filter(e => e.category === 'nap')
   const wakeUps      = parsed.filter(e => e.category === 'woke_up')
   const bedTimeEvts  = parsed.filter(e => e.category === 'bed_time')
   const nightWakings = parsed.filter(e => e.category === 'night_waking')
+
+  // ── PREDICCIONES (BEDTIME & NAPS) ──────────────────────────────────────
+  const bedtimePredictions: SleepStats['predictions']['bedtime'] = []
+  const napPredictions: SleepStats['predictions']['naps'] = []
+
+  bedTimeEvts.forEach(bed => {
+    if (bed.metadata?.predicted_start_time) {      
+      const predStart = new Date(bed.metadata.predicted_start_time)
+      const errorMinutes = Math.round((bed.startDate.getTime() - predStart.getTime()) / 60000)
+      bedtimePredictions.push({
+        date: toDateLabel(bed.startDate),
+        errorMinutes
+      })
+    }
+  })
+
+  naps.forEach(nap => {
+    if (nap.endDate && nap.metadata?.predicted_start_time && nap.metadata?.predicted_end_time) {
+      const realDuration = Math.round((nap.endDate.getTime() - nap.startDate.getTime()) / 60000)
+      
+      const predStart = new Date(nap.metadata.predicted_start_time)
+      const predEnd = new Date(nap.metadata.predicted_end_time)
+      const predDuration = Math.round((predEnd.getTime() - predStart.getTime()) / 60000)
+      
+      // NUEVO: Calculamos el error de inicio de la siesta
+      const errorStartMinutes = Math.round((nap.startDate.getTime() - predStart.getTime()) / 60000)
+
+      napPredictions.push({
+        id: nap.id, // Opcional, pero recomendado
+        date: toDateLabel(nap.startDate),
+        timeStr: toTimeStr(nap.startDate), // Lo usamos para etiquetar la gráfica
+        realDuration,
+        predDuration,
+        errorStartMinutes // Enviamos el dato al cliente
+      })
+    }
+  })
 
   // ── GANTT ──────────────────────────────────────────────────────────────
   const ganttEntries: GanttEntry[] = []
@@ -318,6 +371,10 @@ export async function getSleepStats(
     },
     ganttByDate, dailySleep, wakeUpTimes, bedTimes,
     napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter,
-    cursedHour: hourMap
+    cursedHour: hourMap,
+    predictions: {
+      bedtime: bedtimePredictions,
+      naps: napPredictions
+    }
   }
 }
