@@ -34,7 +34,11 @@ const quickRanges = [
     },
 ]
 
-export default function DateRangePicker() {
+interface DateRangePickerProps {
+    defaultDays?: number; // Permite pasarle 7, 30, 90... desde la page si fuera necesario
+}
+
+export default function DateRangePicker({ defaultDays = 30 }: DateRangePickerProps) {
     const router = useRouter()
     const pathname = usePathname()
     const searchParams = useSearchParams()
@@ -45,9 +49,10 @@ export default function DateRangePicker() {
     const startParam = searchParams.get('start')
     const endParam = searchParams.get('end')
 
+    // Si no hay parámetros en la URL, asume los últimos N días definidos
     const [date, setDate] = useState<DateRange | undefined>({
-        from: startParam ? parseISO(startParam) : undefined,
-        to: endParam ? parseISO(endParam) : undefined,
+        from: startParam ? parseISO(startParam) : subDays(new Date(), defaultDays - 1),
+        to: endParam ? parseISO(endParam) : new Date(),
     })
 
     useEffect(() => {
@@ -80,7 +85,13 @@ export default function DateRangePicker() {
 
     const clearDates = (e: React.MouseEvent) => {
         e.stopPropagation()
-        setDate(undefined)
+        // Al limpiar, volvemos al estado inicial por defecto para mantener la coherencia
+        const defaultRange = {
+            from: subDays(new Date(), defaultDays - 1),
+            to: new Date()
+        }
+        setDate(defaultRange)
+        
         const params = new URLSearchParams(searchParams.toString())
         params.delete('start')
         params.delete('end')
@@ -102,7 +113,7 @@ export default function DateRangePicker() {
             >
                 <CalendarIcon size={16} className="text-primary shrink-0" />
                 <span className="text-sm text-on-surface">{label}</span>
-                {date?.from ? (
+                {startParam || endParam ? (
                     <X
                         size={14}
                         className="text-on-surface/40 hover:text-error transition-colors cursor-pointer ml-1"

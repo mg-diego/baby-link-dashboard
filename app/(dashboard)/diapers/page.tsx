@@ -2,6 +2,7 @@ import Loader from '@/components/loader'
 import DiapersClient from './client'
 import { getDiaperStats } from './data'
 import { Suspense } from 'react'
+import { format, subDays } from 'date-fns'
 
 export const dynamic = 'force-dynamic'
 
@@ -13,7 +14,13 @@ async function DiapersContent({ searchParams }: PageProps) {
   const babyId = '336351d0-40a3-4f4a-a04f-969a58212cb0'
   const params = await searchParams
 
-  const stats = await getDiaperStats(babyId, params.start, params.end)
+  const defaultStart = format(subDays(new Date(), 29), 'yyyy-MM-dd')
+  const defaultEnd = format(new Date(), 'yyyy-MM-dd')
+
+  const start = params.start || defaultStart
+  const end = params.end || defaultEnd  
+
+  const stats = await getDiaperStats(babyId, start, end)
 
   if (!stats) {
     return (

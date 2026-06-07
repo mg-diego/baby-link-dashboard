@@ -9,6 +9,7 @@ import {
 import { Moon, Clock, Sunrise, BellRing, Target, Sparkles } from 'lucide-react'
 import { SleepStats, GanttEntry } from './data'
 import { DashboardSection, ChartTooltip, C } from '@/components/dashboard-section'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
 const TICK_STYLE = { fill: '#E8EAF6', fontSize: 11, opacity: 0.5 }
 
@@ -25,76 +26,203 @@ const formatHour = (v: number) => {
   return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`
 }
 
-function SleepGantt({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] }) {
-  const ROW_H  = 26
-  const GAP    = 3
-  const LEFT   = 64
-  const RIGHT  = 8
-  const BOTTOM = 28
-  const W      = 760
-  const chartW = W - LEFT - RIGHT
-  const totalH = ganttByDate.length * (ROW_H + GAP) + BOTTOM
+// En client.tsx — reemplaza SleepGantt por SleepCalendar
 
-  const xTicks = [0, 4, 8, 12, 16, 20, 24]
+const STATUS_COLORS: Record<string, string> = {
+  night_solid:       '#6BCFA0',  // verde menta   → positivo, descanso sólido
+  night_interrupted: '#FFAA60',  // ámbar         → alerta, sueño comprometido
+  night_waking:      '#FF5C5C',  // rojo vivo     → despertar, interrupción
+  nap:               '#A78BFA',  // violeta        → categoría propia, claramente distinta
+}
+const STATUS_LABELS: Record<string, string> = {
+  night_solid:       'Sueño sólido',
+  night_interrupted: 'Sueño interrumpido',
+  night_waking:      'Despertar nocturno',
+  nap:               'Siesta',
+}
+
+// Dimensiones
+const CHART_H = 600
+const TOP     = 28
+const COL_W   = 80
+const LEFT    = 52
+const totalH  = TOP + CHART_H
+
+const hourToY = (h: number) => TOP + (h / 24) * CHART_H
+const durToH  = (d: number) => (d / 24) * CHART_H
+
+function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] }) {
+  const [nightMode, setNightMode] = useState(false)
+  const scrollRef = useRef<HTMLDivElement>(null)
+
+  // Auto-scroll al dato más reciente al montar
+  useEffect(() => {
+    if (scrollRef.current)
+      scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
+  }, [ganttByDate, nightMode])
+
+  const columns = useMemo(() => {
+    if (!nightMode) {
+      // Modo día 00:00–24:00: eventos tal cual
+      return ganttByDate.map(day => ({
+        key: day.date, label: day.label,
+        events: day.events.map(e => ({
+          ...e,
+          displayHour:     e.startHour,
+          displayDuration: e.duration,
+        })),
+      }))
+    }
+
+    // Modo noche 12:00–12:00 del día siguiente
+    // Columna N = tarde del día N (startHour >= 12) + madrugada del día N+1 (startHour < 12)
+    // splitAtMidnight ya corta a medianoche, así que los fragmentos conectan exactamente en displayHour=12
+    return ganttByDate.map((day, i) => {
+      const next = ganttByDate[i + 1]
+
+      const pm = day.events
+        .filter(e => e.startHour >= 12)
+        .map(e => ({
+          ...e,
+          displayHour:     e.startHour - 12,
+          displayDuration: Math.min(e.duration, 24 - (e.startHour - 12)),
+        }))
+
+      const am = (next?.events ?? [])
+        .filter(e => e.startHour < 12)
+        .map(e => ({
+          ...e,
+          displayHour:     e.startHour + 12,
+          displayDuration: Math.min(e.duration, 24 - (e.startHour + 12)),
+        }))
+
+      return { key: day.date, label: day.label, events: [...pm, ...am] }
+    })
+  }, [ganttByDate, nightMode])
+
+  if (!ganttByDate.length)
+    return <p className="text-on-surface/40 text-sm">Sin datos</p>
+
+  const svgW = columns.length * COL_W
+
+  // Ticks cada 4h
+  const yTicks = [0, 4, 8, 12, 16, 20, 24]
+  const yTickLabel = (h: number) => {
+    const actual = nightMode ? (h + 12) % 24 : h
+    return `${actual.toString().padStart(2, '0')}:00`
+  }
 
   return (
-    <div className="overflow-x-auto">
-      <div className="min-w-[600px]">
-        <svg viewBox={`0 0 ${W} ${totalH}`} width="100%" className="overflow-visible">
-          {xTicks.map(h => {
-            const x = LEFT + (h / 24) * chartW
-            return <line key={h} x1={x} y1={0} x2={x} y2={totalH - BOTTOM} stroke={C.outline} strokeWidth={1} />
-          })}
+    <div>
+      {/* Controles */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap gap-4">
+          {Object.entries(STATUS_LABELS).map(([key, label]) => (
+            <span key={key} className="flex items-center gap-1.5 text-xs text-on-surface/60">
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: STATUS_COLORS[key] }} />
+              {label}
+            </span>
+          ))}
+        </div>
+        <button
+          onClick={() => setNightMode(n => !n)}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+            nightMode
+              ? 'bg-primary-container text-primary border-primary/30'
+              : 'bg-surface-container text-on-surface/60 border-outline'
+          }`}
+        >
+          {nightMode ? '🌙 Modo noche' : '☀️ Modo día'}
+        </button>
+      </div>
 
-          {ganttByDate.map((row, i) => {
-            const y = i * (ROW_H + GAP)
-            return (
-              <g key={row.date}>
-                <text x={LEFT - 6} y={y + ROW_H / 2 + 4} textAnchor="end" fill={C.onSurface} fontSize={10} opacity={0.7}>
-                  {row.label}
-                </text>
-                <rect x={LEFT} y={y} width={chartW} height={ROW_H} fill={C.surface} rx={3} />
-                {row.events.map((ev, j) => {
-                  const ex = LEFT + (ev.startHour / 24) * chartW
-                  const ew = Math.max((ev.duration / 24) * chartW, 2)
-                  return (
-                    <rect
-                      key={j}
-                      x={ex} y={y + 2}
-                      width={ew} height={ROW_H - 4}
-                      fill={GANTT_COLORS[ev.status]}
-                      rx={3} opacity={0.85}
-                    >
-                      <title>{`${ev.startTimeStr} – ${ev.endTimeStr} (${ev.durationStr})`}</title>
-                    </rect>
-                  )
-                })}
-              </g>
-            )
-          })}
+      {/* Calendario */}
+      <div className="flex">
 
-          {xTicks.map(h => {
-            const x = LEFT + (h / 24) * chartW
-            return (
-              <text key={h} x={x} y={totalH - 6} textAnchor="middle" fill={C.muted} fontSize={10}>
-                {`${h.toString().padStart(2,'0')}:00`}
-              </text>
-            )
-          })}
-        </svg>
-
-        <div className="flex gap-4 mt-3 flex-wrap">
-          {[
-            { label: 'Sueño sólido',       color: GANTT_COLORS.night_solid },
-            { label: 'Sueño interrumpido', color: GANTT_COLORS.night_interrupted },
-            { label: 'Despertar nocturno', color: GANTT_COLORS.night_waking },
-            { label: 'Siesta',             color: GANTT_COLORS.nap },
-          ].map(l => (
-            <div key={l.label} className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-sm" style={{ background: l.color }} />
-              <span className="text-xs text-onSurface/60">{l.label}</span>
+        {/* Eje Y fijo (no hace scroll) */}
+        <div className="shrink-0 relative border-r border-outline/30" style={{ width: LEFT, height: totalH }}>
+          <div style={{ height: TOP }} /> {/* hueco para etiquetas de fecha */}
+          {yTicks.map(h => (
+            <div
+              key={h}
+              className="absolute right-2 text-xs text-on-surface/40 select-none -translate-y-1/2"
+              style={{ top: hourToY(h) }}
+            >
+              {yTickLabel(h)}
             </div>
           ))}
+        </div>
+
+        {/* Área con scroll */}
+        <div ref={scrollRef} className="overflow-x-auto flex-1 scrollbar-custom">
+          <svg width={svgW} height={totalH}>
+
+            {/* Líneas de cuadrícula horizontales */}
+            {yTicks.map(h => (
+              <line
+                key={h}
+                x1={0} y1={hourToY(h)} x2={svgW} y2={hourToY(h)}
+                stroke="#2E3250"
+                strokeWidth={h === 0 || h === 24 ? 1 : 0.5}
+              />
+            ))}
+
+            {/* Modo noche: línea de medianoche */}
+            {nightMode && (
+              <line
+                x1={0} y1={hourToY(12)} x2={svgW} y2={hourToY(12)}
+                stroke="#7BB8F0" strokeWidth={1}
+                strokeDasharray="4 3" opacity={0.4}
+              />
+            )}
+
+            {/* Columnas */}
+            {columns.map((col, i) => {
+              const x = i * COL_W
+              return (
+                <g key={col.key}>
+                  {/* Fondo alternante */}
+                  <rect
+                    x={x} y={TOP} width={COL_W} height={CHART_H}
+                    fill={i % 2 === 0 ? 'rgba(26,29,46,0.4)' : 'rgba(36,39,70,0.2)'}
+                  />
+
+                  {/* Separador vertical */}
+                  <line
+                    x1={x} y1={0} x2={x} y2={totalH}
+                    stroke="#2E3250" strokeWidth={0.5}
+                  />
+
+                  {/* Etiqueta de fecha */}
+                  <text
+                    x={x + COL_W / 2} y={TOP - 8}
+                    textAnchor="middle"
+                    fill="#E8EAF6" fontSize={10} opacity={0.6}
+                  >
+                    {col.label}
+                  </text>
+
+                  {/* Eventos */}
+                  {col.events.map((ev, j) => {
+                    const PAD = 5
+                    const ey = hourToY(ev.displayHour)
+                    const eh = Math.max(2, durToH(ev.displayDuration))
+                    return (
+                      <rect
+                        key={j}
+                        x={x + PAD} y={ey}
+                        width={COL_W - PAD * 2} height={eh}
+                        fill={STATUS_COLORS[ev.status]}
+                        rx={3} opacity={0.85}
+                      >
+                        <title>{`${STATUS_LABELS[ev.status]}\n${ev.startTimeStr} – ${ev.endTimeStr}\n${ev.durationStr}`}</title>
+                      </rect>
+                    )
+                  })}
+                </g>
+              )
+            })}
+          </svg>
         </div>
       </div>
     </div>
@@ -133,7 +261,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           <p className="text-sm text-onSurface/50 mb-4">
             Periodos de sueño por día. Hover sobre cada barra para ver detalles.
           </p>
-          <SleepGantt ganttByDate={ganttByDate} />
+          <SleepCalendar ganttByDate={ganttByDate} />
         </div>
       )
     },

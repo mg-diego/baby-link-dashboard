@@ -1,4 +1,5 @@
 import { Suspense } from 'react'
+import { format, subDays } from 'date-fns'
 import Loader from '@/components/loader'
 import FeedingClient from './client'
 import { getFeedStats } from './data'
@@ -13,7 +14,13 @@ async function FeedingContent({ searchParams }: PageProps) {
   const babyId = '336351d0-40a3-4f4a-a04f-969a58212cb0'
   const params = await searchParams
 
-  const stats = await getFeedStats(babyId, params.start, params.end)
+  const defaultStart = format(subDays(new Date(), 29), 'yyyy-MM-dd')
+  const defaultEnd = format(new Date(), 'yyyy-MM-dd')
+
+  const start = params.start || defaultStart
+  const end = params.end || defaultEnd  
+
+  const stats = await getFeedStats(babyId, start, end)
 
   if (!stats) {
     return (
