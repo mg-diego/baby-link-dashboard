@@ -18,7 +18,7 @@ export const C = {
 export const ChartTooltip = ({ active, payload, label, formatter }: any) => {
   if (!active || !payload?.length) return null
   return (
-    <div className="bg-surface-containerHighest border border-outline rounded-xl px-3 py-2 text-xs shadow-xl">
+    <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-xl">
       <p className="text-onSurface/60 mb-1">{label}</p>
       {payload.map((p: any, i: number) => (
         <p key={i} style={{ color: p.color ?? C.primary }}>

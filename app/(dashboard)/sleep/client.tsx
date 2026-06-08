@@ -14,42 +14,42 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 const TICK_STYLE = { fill: '#E8EAF6', fontSize: 11, opacity: 0.5 }
 
 const GANTT_COLORS: Record<GanttEntry['status'], string> = {
-  night_solid:       '#8A2BE2',
+  night_solid: '#8A2BE2',
   night_interrupted: '#7BB8F0',
-  night_waking:      '#F09595',
-  nap:               '#B8A0E8',
+  night_waking: '#F09595',
+  nap: '#B8A0E8',
 }
 
 const formatHour = (v: number) => {
   const h = Math.floor(v) % 24
   const m = Math.round((v % 1) * 60)
-  return `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}`
+  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
 // En client.tsx — reemplaza SleepGantt por SleepCalendar
 
 const STATUS_COLORS: Record<string, string> = {
-  night_solid:       '#6BCFA0',  // verde menta   → positivo, descanso sólido
+  night_solid: '#6BCFA0',  // verde menta   → positivo, descanso sólido
   night_interrupted: '#FFAA60',  // ámbar         → alerta, sueño comprometido
-  night_waking:      '#FF5C5C',  // rojo vivo     → despertar, interrupción
-  nap:               '#A78BFA',  // violeta        → categoría propia, claramente distinta
+  night_waking: '#FF5C5C',  // rojo vivo     → despertar, interrupción
+  nap: '#A78BFA',  // violeta        → categoría propia, claramente distinta
 }
 const STATUS_LABELS: Record<string, string> = {
-  night_solid:       'Sueño sólido',
+  night_solid: 'Sueño sólido',
   night_interrupted: 'Sueño interrumpido',
-  night_waking:      'Despertar nocturno',
-  nap:               'Siesta',
+  night_waking: 'Despertar nocturno',
+  nap: 'Siesta',
 }
 
 // Dimensiones
 const CHART_H = 600
-const TOP     = 28
-const COL_W   = 80
-const LEFT    = 52
-const totalH  = TOP + CHART_H
+const TOP = 28
+const COL_W = 100
+const LEFT = 52
+const totalH = TOP + CHART_H
 
 const hourToY = (h: number) => TOP + (h / 24) * CHART_H
-const durToH  = (d: number) => (d / 24) * CHART_H
+const durToH = (d: number) => (d / 24) * CHART_H
 
 function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] }) {
   const [nightMode, setNightMode] = useState(false)
@@ -68,7 +68,7 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
         key: day.date, label: day.label,
         events: day.events.map(e => ({
           ...e,
-          displayHour:     e.startHour,
+          displayHour: e.startHour,
           displayDuration: e.duration,
         })),
       }))
@@ -84,7 +84,7 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
         .filter(e => e.startHour >= 12)
         .map(e => ({
           ...e,
-          displayHour:     e.startHour - 12,
+          displayHour: e.startHour - 12,
           displayDuration: Math.min(e.duration, 24 - (e.startHour - 12)),
         }))
 
@@ -92,7 +92,7 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
         .filter(e => e.startHour < 12)
         .map(e => ({
           ...e,
-          displayHour:     e.startHour + 12,
+          displayHour: e.startHour + 12,
           displayDuration: Math.min(e.duration, 24 - (e.startHour + 12)),
         }))
 
@@ -106,7 +106,7 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
   const svgW = columns.length * COL_W
 
   // Ticks cada 4h
-  const yTicks = [0, 4, 8, 12, 16, 20, 24]
+  const yTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
   const yTickLabel = (h: number) => {
     const actual = nightMode ? (h + 12) % 24 : h
     return `${actual.toString().padStart(2, '0')}:00`
@@ -126,11 +126,10 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
         </div>
         <button
           onClick={() => setNightMode(n => !n)}
-          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
-            nightMode
-              ? 'bg-primary-container text-primary border-primary/30'
-              : 'bg-surface-container text-on-surface/60 border-outline'
-          }`}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${nightMode
+            ? 'bg-primary-container text-primary border-primary/30'
+            : 'bg-surface-container text-on-surface/60 border-outline'
+            }`}
         >
           {nightMode ? '🌙 Modo noche' : '☀️ Modo día'}
         </button>
@@ -231,7 +230,7 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
 
 export default function SleepClient({ stats }: { stats: SleepStats }) {
   const { kpis, ganttByDate, dailySleep, wakeUpTimes, bedTimes,
-          napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter, cursedHour, predictions } = stats
+    napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter, cursedHour, predictions } = stats
 
   const safePredictions = predictions || { bedtime: [], naps: [] }
 
@@ -243,7 +242,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
   }, {})
   const napStackData = Object.entries(napByDate).map(([date, naps]) => ({ date, ...(naps as any) }))
 
-  const NAP_COLORS = ['#B8A0E8','#9B7FDB','#7B5FC4','#5C40A0','#3D2280']
+  const NAP_COLORS = ['#B8A0E8', '#9B7FDB', '#7B5FC4', '#5C40A0', '#3D2280']
   const maxCursed = Math.max(...cursedHour.map((h: any) => h.count))
 
   const kpiData = [
@@ -252,6 +251,60 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
     { icon: Clock, label: "Hora de dormir", value: kpis.avgBedTime, iconColorClass: "text-secondary bg-secondary/20" },
     { icon: BellRing, label: "Despertares noct", value: kpis.avgNightWakings, iconColorClass: "text-error bg-error/20" },
   ]
+
+  const withTrend = (data: any[], key: string) => {
+    return data.map((item, idx) => {
+      let sum = 0;
+      let count = 0;
+      for (let i = Math.max(0, idx - 2); i <= Math.min(data.length - 1, idx + 2); i++) {
+        if (data[i][key] !== undefined && data[i][key] !== null) {
+          sum += data[i][key];
+          count++;
+        }
+      }
+      return {
+        ...item,
+        [`${key}Trend`]: count > 0 ? sum / count : null
+      };
+    });
+  };
+
+  const dailySleepData = withTrend(dailySleep, 'totalHours');
+  const wakeUpData = withTrend(wakeUpTimes, 'hourDecimal');
+  const bedTimesData = withTrend(bedTimes, 'hourDecimal');
+
+  const napStackWithTotal = napStackData.map((d: any) => {
+    const total = Object.keys(d).reduce((sum, key) => key !== 'date' ? sum + (Number(d[key]) || 0) : sum, 0);
+    return { ...d, totalNaps: total };
+  });
+  const napStackWithTrend = withTrend(napStackWithTotal, 'totalNaps');
+
+  // 1. Agrupamos todas las ventanas y promedios por día en un solo objeto
+  const wakeByDate = wakeWindows.reduce((acc: any, w: any) => {
+    if (!acc[w.date]) acc[w.date] = { date: w.date, sum: 0, count: 0, windows: [] };
+
+    // Guardamos la ventana específica como una columna para los puntos (Scatter)
+    acc[w.date][w.windowName] = w.durationHours;
+
+    // Guardamos los datos legibles para el Tooltip
+    acc[w.date].windows.push({ name: w.windowName, str: w.durationStr });
+
+    acc[w.date].sum += w.durationHours;
+    acc[w.date].count += 1;
+    return acc;
+  }, {});
+
+  // 2. Calculamos el promedio diario
+  const dailyWakeAvg = Object.values(wakeByDate).map((d: any) => ({
+    ...d,
+    avgWindow: d.sum / d.count
+  }));
+
+  // 3. Aplicamos la tendencia
+  const wakeChartData = withTrend(dailyWakeAvg, 'avgWindow');
+
+  // Extraemos los nombres únicos de las ventanas para pintar los colores
+  const windowNames = [...new Set(wakeWindows.map((w: any) => w.windowName))];
 
   const tabsData = [
     {
@@ -272,31 +325,29 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Horas de sueño totales por día</h3>
             <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart  data={dailySleep}>
+              <ComposedChart data={dailySleepData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
                 <XAxis dataKey="date" tick={TICK_STYLE} />
-                <YAxis domain={[0, 24]} tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={v => `${v}h`} />
+                <YAxis domain={[0, 24]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v}h`} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)}h`} />} />
-                <Area type="monotone" dataKey="totalHours" name="Sueño total" stroke={C.primary} fill={C.primary} fillOpacity={0.15} strokeWidth={2} />
-                <Line dataKey="avg" name="Promedio" stroke={C.muted} strokeDasharray="4 4" dot={false} strokeWidth={1.5} />
-              </ComposedChart >
+                <Area type="monotone" dataKey="totalHours" name="Sueño total" stroke={C.primary} fill={C.primary} fillOpacity={0.15} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="totalHoursTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                <Line type="monotone" dataKey="avg" name="Promedio" stroke={C.muted} strokeDasharray="4 4" dot={false} strokeWidth={1.5} activeDot={false} />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Hora de despertar</h3>
             <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={wakeUpTimes}>
+              <LineChart data={wakeUpData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
                 <XAxis dataKey="date" tick={TICK_STYLE} />
-                <YAxis domain={[4, 12]} tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={formatHour} />
-                <Tooltip content={<ChartTooltip formatter={(_: any, __: any, p: any) => p?.payload?.timeStr} />} />
-                <Line type="monotone" dataKey="hourDecimal" name="Despertar" stroke="#FFB74D" strokeWidth={2}
-                  dot={{ fill: '#FFB74D', r: 3 }} />
-                <ReferenceLine y={wakeUpTimes.reduce((s:number,w:any)=>s+w.hourDecimal,0)/Math.max(wakeUpTimes.length,1)}
-                  stroke={C.muted} strokeDasharray="4 4" />
+                <YAxis domain={[4, 12]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                <Tooltip content={<ChartTooltip formatter={(v: number) => `${formatHour(v)}h`} />} />
+                <Line type="monotone" dataKey="hourDecimal" name="Despertar" stroke="#FFB74D" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="hourDecimalTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                <ReferenceLine y={wakeUpData.reduce((s: number, w: any) => s + w.hourDecimal, 0) / Math.max(wakeUpData.length, 1)} stroke={C.muted} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -304,16 +355,14 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Hora de dormir</h3>
             <ResponsiveContainer width="100%" height={240}>
-              <LineChart data={bedTimes}>
+              <LineChart data={bedTimesData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
-                <YAxis domain={[16, 24]} tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={formatHour} />
-                <Tooltip content={<ChartTooltip formatter={(_: any, __: any, p: any) => p?.payload?.timeStr} />} />
-                <Line dataKey="hourDecimal" name="Hora dormir" stroke={C.error} strokeWidth={2}
-                  dot={{ fill: C.error, r: 3 }} />
-                <ReferenceLine y={bedTimes.reduce((s:number,b:any)=>s+b.hourDecimal,0)/Math.max(bedTimes.length,1)}
-                  stroke={C.muted} strokeDasharray="4 4" />
+                <XAxis dataKey="date" tick={TICK_STYLE} />
+                <YAxis domain={[16, 24]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                <Tooltip content={<ChartTooltip formatter={(v: number) => `${formatHour(v)}h`} />} />
+                <Line type="monotone" dataKey="hourDecimal" name="Hora dormir" stroke={C.error} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
+                <Line type="monotone" dataKey="hourDecimalTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                <ReferenceLine y={bedTimesData.reduce((s: number, b: any) => s + b.hourDecimal, 0) / Math.max(bedTimesData.length, 1)} stroke={C.muted} strokeDasharray="4 4" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -327,16 +376,17 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Duración de siestas por día</h3>
             <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={napStackData}>
+              <ComposedChart data={napStackWithTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
                 <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}h`} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(2)}h`} />} />
                 <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
                 {napRanks.map((rank: any, i: number) => (
-                  <Bar key={rank} dataKey={rank} stackId="a" fill={NAP_COLORS[i % NAP_COLORS.length]} radius={i === napRanks.length - 1 ? [4,4,0,0] : undefined} />
+                  <Bar key={rank} dataKey={rank} stackId="a" fill={NAP_COLORS[i % NAP_COLORS.length]} radius={i === napRanks.length - 1 ? [4, 4, 0, 0] : undefined} />
                 ))}
-              </BarChart>
+                <Line type="monotone" dataKey="totalNapsTrend" name="Tendencia Total" stroke="#f6b15cff" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
 
@@ -344,33 +394,64 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <h3 className="text-sm font-medium text-onSurface mb-1">Ventanas de vigilia</h3>
             <p className="text-xs text-onSurface/40 mb-3">Tiempo despierto entre siesta y siesta / hora de dormir</p>
             <ResponsiveContainer width="100%" height={280}>
-              <ScatterChart>
+              <ComposedChart data={wakeChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" type="category" tick={{ fill: C.muted, fontSize: 11 }} />
-                <YAxis dataKey="durationHours" name="Horas" tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={v => `${v.toFixed(1)}h`} />
-                <Tooltip cursor={{ stroke: C.outline }}
+                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
+                <YAxis name="Horas" tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}h`} />
+
+                <Tooltip
+                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                   content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
+                    if (!active || !payload?.length) return null;
+                    const d = payload[0].payload;
+
                     return (
-                      <div className="bg-surface-containerHighest border border-outline rounded-xl px-3 py-2 text-xs">
-                        <p className="text-onSurface/60">{d.date}</p>
-                        <p className="text-primary">{d.windowName}: <span className="font-medium">{d.durationStr}</span></p>
+                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs min-w-[160px]">
+                        <p className="text-onSurface/60 font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+
+                        {d.windows?.map((win: any) => (
+                          <div key={win.name} className="flex justify-between items-center gap-4 my-1">
+                            <span className="text-primary/80">{win.name}</span>
+                            <span className="text-primary font-bold">{win.str}</span>
+                          </div>
+                        ))}
+
+                        {d.avgWindowTrend !== null && d.avgWindowTrend !== undefined && (
+                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                            <span className="text-[#f6b15c]">Tendencia Gral.</span>
+                            <span className="text-[#f6b15c] font-bold">{d.avgWindowTrend.toFixed(1)}h</span>
+                          </div>
+                        )}
                       </div>
                     )
                   }}
                 />
-                {[...new Set(wakeWindows.map((w: any) => w.windowName))].map((name: any, i: number) => (
-                  <Scatter
+
+                {windowNames.map((name: any, i: number) => (
+                  <Line
                     key={name}
                     name={name}
-                    data={wakeWindows.filter((w: any) => w.windowName === name)}
-                    fill={NAP_COLORS[i % NAP_COLORS.length]}
+                    dataKey={name}
+                    type="monotone"
+                    stroke="transparent"
+                    dot={{ r: 4, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
+                    activeDot={{ r: 6, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
                   />
                 ))}
+
+                <Line
+                  type="monotone"
+                  dataKey="avgWindowTrend"
+                  name="Tendencia Promedio"
+                  stroke="#f6b15cff"
+                  strokeWidth={3}
+                  dot={false}
+                  activeDot={false}
+                  strokeDasharray="5 5"
+                />
+
                 <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
-              </ScatterChart>
+              </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
@@ -389,7 +470,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}m`} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)} min`} />} />
-                <Bar dataKey="totalMin" name="Minutos despierto" fill={C.error} radius={[4,4,0,0]} fillOpacity={0.8} />
+                <Bar dataKey="totalMin" name="Minutos despierto" fill={C.error} radius={[4, 4, 0, 0]} fillOpacity={0.8} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -408,7 +489,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                     if (!active || !payload?.length) return null
                     const d = payload[0].payload
                     return (
-                      <div className="bg-surface-containerHighest border border-outline rounded-xl px-3 py-2 text-xs">
+                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs">
                         <p className="text-onSurface/60">{d.date}</p>
                         <p className="text-error">Hora: <span className="font-medium">{d.timeStr}</span></p>
                         <p className="text-error">Duración: <span className="font-medium">{d.durationStr}</span></p>
@@ -438,7 +519,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   interval={3} />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} veces`} />} />
-                <Bar dataKey="count" name="Despertares" radius={[3,3,0,0]}>
+                <Bar dataKey="count" name="Despertares" radius={[3, 3, 0, 0]}>
                   {cursedHour.map((entry: any, i: number) => (
                     <Cell
                       key={i}
@@ -484,9 +565,9 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
 
         return (
           <div className="space-y-8 animate-in fade-in duration-500">
-            
+
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+              <div className="bg-surface border border-outline rounded-xl p-4 flex items-center gap-4">
                 <div className="p-3 bg-indigo-500/20 text-indigo-400 rounded-lg shrink-0">
                   <Moon size={24} />
                 </div>
@@ -496,7 +577,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 </div>
               </div>
 
-              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+              <div className="bg-surface border border-outline rounded-xl p-4 flex items-center gap-4">
                 <div className="p-3 bg-emerald-500/20 text-emerald-400 rounded-lg shrink-0">
                   <Target size={24} />
                 </div>
@@ -506,7 +587,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 </div>
               </div>
 
-              <div className="bg-surface-containerHighest border border-outline rounded-xl p-4 flex items-center gap-4">
+              <div className="bg-surface border border-outline rounded-xl p-4 flex items-center gap-4">
                 <div className="p-3 bg-amber-500/20 text-amber-400 rounded-lg shrink-0">
                   <Sparkles size={24} />
                 </div>
@@ -529,8 +610,8 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
                   <ReferenceLine y={0} stroke={C.muted} />
-                  <Bar 
-                    dataKey="errorMinutes" 
+                  <Bar
+                    dataKey="errorMinutes"
                     name="Desviación"
                     shape={(props: any) => {
                       const err = Math.abs(props.payload.errorMinutes);
@@ -554,8 +635,8 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
                   <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
                   <ReferenceLine y={0} stroke={C.muted} />
-                  <Bar 
-                    dataKey="errorStartMinutes" 
+                  <Bar
+                    dataKey="errorStartMinutes"
                     name="Desviación de Inicio"
                     shape={(props: any) => {
                       const err = Math.abs(props.payload.errorStartMinutes);
@@ -584,7 +665,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                 </ComposedChart>
               </ResponsiveContainer>
             </div>
-            
+
           </div>
         );
       })()
@@ -592,7 +673,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
   ]
 
   return (
-    <DashboardSection 
+    <DashboardSection
       title="💤 Patrones de Sueño"
       description="Visualiza el registro de sueño o promedios."
       kpis={kpiData}

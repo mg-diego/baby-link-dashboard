@@ -5,7 +5,7 @@ export async function getFeedStats(babyId: string, startDate?: string, endDate?:
 
   let query = supabase
     .from('baby_events')
-    .select('*')
+    .select('id, category, start_time, end_time, metadata')
     .eq('baby_id', babyId)
     .eq('category', 'feed')
 

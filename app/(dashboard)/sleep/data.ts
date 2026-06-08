@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient, fetchAllRows } from '@/utils/supabase/server'
 
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600)
@@ -48,13 +48,13 @@ export interface SleepStats {
   cursedHour: { hour: string; count: number }[]
   predictions: {
     bedtime: { date: string; errorMinutes: number }[]
-    naps: { 
+    naps: {
       id: string
       date: string
       timeStr: string
       realDuration: number
       predDuration: number
-      errorStartMinutes: number 
+      errorStartMinutes: number
     }[]
   }
 }
@@ -104,35 +104,38 @@ export async function getSleepStats(
   end?: string
 ): Promise<SleepStats | null> {
   const supabase = await createClient()
+  const getBaseQuery = () => {
+    let query = supabase
+      .from('baby_events')
+      .select('id, category, start_time, end_time, metadata')
+      .eq('baby_id', babyId)
+      .in('category', ['nap', 'bed_time', 'woke_up', 'night_waking'])
+      .order('start_time', { ascending: true })
 
-  let query = supabase
-    .from('baby_events')
-    .select('*')
-    .eq('baby_id', babyId)
-    .in('category', ['nap', 'bed_time', 'woke_up', 'night_waking'])
-    .order('start_time', { ascending: true })
+    if (start) query = query.gte('start_time', `${start}T00:00:00`)
+    if (end) query = query.lte('start_time', `${end}T23:59:59`)
 
-  if (start) query = query.gte('start_time', `${start}T00:00:00`)
-  if (end)   query = query.lte('start_time', `${end}T23:59:59`)
+    return query
+  }
 
-  const { data: events, error } = await query
-  if (error) throw new Error(error.message)
-  if (!events || events.length === 0) return null
+  const allEvents = await fetchAllRows<any>(getBaseQuery)
 
-  const parsed = events.map(e => {
+  if (allEvents.length === 0) return null
+
+  const parsed = allEvents.map(e => {
     let meta: any = {}
-    try { meta = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}) } catch {}
+    try { meta = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}) } catch { }
     return {
       ...e,
       metadata: meta,
       startDate: new Date(e.start_time),
-      endDate:   e.end_time ? new Date(e.end_time) : null,
+      endDate: e.end_time ? new Date(e.end_time) : null,
     }
   })
 
-  const naps         = parsed.filter(e => e.category === 'nap')
-  const wakeUps      = parsed.filter(e => e.category === 'woke_up')
-  const bedTimeEvts  = parsed.filter(e => e.category === 'bed_time')
+  const naps = parsed.filter(e => e.category === 'nap')
+  const wakeUps = parsed.filter(e => e.category === 'woke_up')
+  const bedTimeEvts = parsed.filter(e => e.category === 'bed_time')
   const nightWakings = parsed.filter(e => e.category === 'night_waking')
 
   // ── PREDICCIONES (BEDTIME & NAPS) ──────────────────────────────────────
@@ -140,7 +143,7 @@ export async function getSleepStats(
   const napPredictions: SleepStats['predictions']['naps'] = []
 
   bedTimeEvts.forEach(bed => {
-    if (bed.metadata?.predicted_start_time) {      
+    if (bed.metadata?.predicted_start_time) {
       const predStart = new Date(bed.metadata.predicted_start_time)
       const errorMinutes = Math.round((bed.startDate.getTime() - predStart.getTime()) / 60000)
       bedtimePredictions.push({
@@ -153,21 +156,21 @@ export async function getSleepStats(
   naps.forEach(nap => {
     if (nap.endDate && nap.metadata?.predicted_start_time && nap.metadata?.predicted_end_time) {
       const realDuration = Math.round((nap.endDate.getTime() - nap.startDate.getTime()) / 60000)
-      
+
       const predStart = new Date(nap.metadata.predicted_start_time)
       const predEnd = new Date(nap.metadata.predicted_end_time)
       const predDuration = Math.round((predEnd.getTime() - predStart.getTime()) / 60000)
-      
+
       // NUEVO: Calculamos el error de inicio de la siesta
       const errorStartMinutes = Math.round((nap.startDate.getTime() - predStart.getTime()) / 60000)
 
       napPredictions.push({
-        id: nap.id, // Opcional, pero recomendado
+        id: nap.id,
         date: toDateLabel(nap.startDate),
-        timeStr: toTimeStr(nap.startDate), // Lo usamos para etiquetar la gráfica
+        timeStr: toTimeStr(nap.startDate),
         realDuration,
         predDuration,
-        errorStartMinutes // Enviamos el dato al cliente
+        errorStartMinutes
       })
     }
   })
@@ -185,7 +188,7 @@ export async function getSleepStats(
   })
 
   // Night sessions: pair each bed_time with the next woke_up
-  const sortedBeds    = [...bedTimeEvts].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
+  const sortedBeds = [...bedTimeEvts].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
   const sortedWakeUps = [...wakeUps].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
 
   const dailySleepMap = new Map<string, number>()
@@ -276,7 +279,7 @@ export async function getSleepStats(
         napRank: `Nap ${i + 1}`,
         durationHours: (nap.endDate.getTime() - nap.startDate.getTime()) / 3600000,
         startTimeStr: toTimeStr(nap.startDate),
-        endTimeStr:   toTimeStr(nap.endDate)
+        endTimeStr: toTimeStr(nap.endDate)
       })
     })
   })
@@ -291,24 +294,24 @@ export async function getSleepStats(
 
   // ── WAKE UP & BED TIMES ────────────────────────────────────────────────
   const wakeUpTimes = wakeUps.map(w => ({
-    date:        toDateKey(w.startDate),
+    date: toDateKey(w.startDate),
     hourDecimal: w.startDate.getHours() + w.startDate.getMinutes() / 60,
-    timeStr:     toTimeStr(w.startDate)
+    timeStr: toTimeStr(w.startDate)
   })).sort((a, b) => a.date.localeCompare(b.date))
 
   const bedTimes = bedTimeEvts.map(b => ({
-    date:        toDateKey(b.startDate),
+    date: toDateKey(b.startDate),
     hourDecimal: b.startDate.getHours() + b.startDate.getMinutes() / 60,
-    timeStr:     toTimeStr(b.startDate)
+    timeStr: toTimeStr(b.startDate)
   })).sort((a, b) => a.date.localeCompare(b.date))
 
   // ── WAKE WINDOWS ───────────────────────────────────────────────────────
   const wakeWindows: SleepStats['wakeWindows'] = []
   const allByDay = new Map<string, Array<{ time: Date; type: string }>>()
 
-  wakeUps.forEach(w =>     { const dk = toDateKey(w.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: w.startDate,  type: 'woke_up'   }) })
-  naps.forEach(nap =>      { const dk = toDateKey(nap.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.startDate, type: 'nap_start' }); if (nap.endDate) (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.endDate, type: 'nap_end' }) })
-  bedTimeEvts.forEach(b => { const dk = toDateKey(b.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: b.startDate,  type: 'bed_time'  }) })
+  wakeUps.forEach(w => { const dk = toDateKey(w.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: w.startDate, type: 'woke_up' }) })
+  naps.forEach(nap => { const dk = toDateKey(nap.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.startDate, type: 'nap_start' }); if (nap.endDate) (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.endDate, type: 'nap_end' }) })
+  bedTimeEvts.forEach(b => { const dk = toDateKey(b.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: b.startDate, type: 'bed_time' }) })
 
   allByDay.forEach((evts, date) => {
     const sorted = evts.sort((a, b) => a.time.getTime() - b.time.getTime())
@@ -364,10 +367,10 @@ export async function getSleepStats(
 
   return {
     kpis: {
-      avgTotalSleep:    `${avgSleep.toFixed(1)}h`,
-      avgWakeTime:      `${pad(Math.floor(avgWakeH))}:${pad(Math.round((avgWakeH % 1) * 60))}`,
-      avgBedTime:       `${pad(Math.floor(avgBedH))}:${pad(Math.round((avgBedH % 1) * 60))}`,
-      avgNightWakings:  (nightWakings.length / Math.max(sortedBeds.length, 1)).toFixed(1)
+      avgTotalSleep: `${avgSleep.toFixed(1)}h`,
+      avgWakeTime: `${pad(Math.floor(avgWakeH))}:${pad(Math.round((avgWakeH % 1) * 60))}`,
+      avgBedTime: `${pad(Math.floor(avgBedH))}:${pad(Math.round((avgBedH % 1) * 60))}`,
+      avgNightWakings: (nightWakings.length / Math.max(sortedBeds.length, 1)).toFixed(1)
     },
     ganttByDate, dailySleep, wakeUpTimes, bedTimes,
     napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter,
