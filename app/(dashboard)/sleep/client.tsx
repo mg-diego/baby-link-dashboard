@@ -1,24 +1,19 @@
 'use client'
 
 import {
-  AreaChart, Area, LineChart, Line, BarChart, Bar,
+  Area, LineChart, Line, BarChart, Bar,
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid,
   Tooltip, Legend, ResponsiveContainer, ReferenceLine, Cell,
-  ComposedChart, Rectangle
+  ComposedChart, Rectangle,
+  ZAxis
 } from 'recharts'
 import { Moon, Clock, Sunrise, BellRing, Target, Sparkles } from 'lucide-react'
-import { SleepStats, GanttEntry } from './data'
+import { SleepStats } from './data'
 import { DashboardSection, ChartTooltip, C } from '@/components/dashboard-section'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { renderMonthDividers } from '@/components/month-divider'
 
 const TICK_STYLE = { fill: '#E8EAF6', fontSize: 11, opacity: 0.5 }
-
-const GANTT_COLORS: Record<GanttEntry['status'], string> = {
-  night_solid: '#8A2BE2',
-  night_interrupted: '#7BB8F0',
-  night_waking: '#F09595',
-  nap: '#B8A0E8',
-}
 
 const formatHour = (v: number) => {
   const h = Math.floor(v) % 24
@@ -26,7 +21,6 @@ const formatHour = (v: number) => {
   return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
 }
 
-// En client.tsx — reemplaza SleepGantt por SleepCalendar
 
 const STATUS_COLORS: Record<string, string> = {
   night_solid: '#6BCFA0',  // verde menta   → positivo, descanso sólido
@@ -42,7 +36,7 @@ const STATUS_LABELS: Record<string, string> = {
 }
 
 // Dimensiones
-const CHART_H = 600
+const CHART_H = 800
 const TOP = 28
 const COL_W = 100
 const LEFT = 52
@@ -55,7 +49,11 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
   const [nightMode, setNightMode] = useState(false)
   const scrollRef = useRef<HTMLDivElement>(null)
 
-  // Auto-scroll al dato más reciente al montar
+  const isWeekend = (dateStr: string) => {
+    const d = new Date(dateStr)
+    return d.getDay() === 0 || d.getDay() === 6
+  }
+
   useEffect(() => {
     if (scrollRef.current)
       scrollRef.current.scrollLeft = scrollRef.current.scrollWidth
@@ -63,7 +61,6 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
 
   const columns = useMemo(() => {
     if (!nightMode) {
-      // Modo día 00:00–24:00: eventos tal cual
       return ganttByDate.map(day => ({
         key: day.date, label: day.label,
         events: day.events.map(e => ({
@@ -74,9 +71,6 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
       }))
     }
 
-    // Modo noche 12:00–12:00 del día siguiente
-    // Columna N = tarde del día N (startHour >= 12) + madrugada del día N+1 (startHour < 12)
-    // splitAtMidnight ya corta a medianoche, así que los fragmentos conectan exactamente en displayHour=12
     return ganttByDate.map((day, i) => {
       const next = ganttByDate[i + 1]
 
@@ -105,7 +99,6 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
 
   const svgW = columns.length * COL_W
 
-  // Ticks cada 4h
   const yTicks = [0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24]
   const yTickLabel = (h: number) => {
     const actual = nightMode ? (h + 12) % 24 : h
@@ -114,12 +107,11 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
 
   return (
     <div>
-      {/* Controles */}
       <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div className="flex flex-wrap gap-4">
           {Object.entries(STATUS_LABELS).map(([key, label]) => (
             <span key={key} className="flex items-center gap-1.5 text-xs text-on-surface/60">
-              <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: STATUS_COLORS[key] }} />
+              <span className="inline-block w-3 h-3 rounded-sm" style={{ backgroundColor: STATUS_COLORS[key as keyof typeof STATUS_COLORS] }} />
               {label}
             </span>
           ))}
@@ -135,12 +127,9 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
         </button>
       </div>
 
-      {/* Calendario */}
       <div className="flex">
-
-        {/* Eje Y fijo (no hace scroll) */}
         <div className="shrink-0 relative border-r border-outline/30" style={{ width: LEFT, height: totalH }}>
-          <div style={{ height: TOP }} /> {/* hueco para etiquetas de fecha */}
+          <div style={{ height: TOP }} />
           {yTicks.map(h => (
             <div
               key={h}
@@ -152,11 +141,8 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
           ))}
         </div>
 
-        {/* Área con scroll */}
         <div ref={scrollRef} className="overflow-x-auto flex-1 scrollbar-custom">
           <svg width={svgW} height={totalH}>
-
-            {/* Líneas de cuadrícula horizontales */}
             {yTicks.map(h => (
               <line
                 key={h}
@@ -166,7 +152,6 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
               />
             ))}
 
-            {/* Modo noche: línea de medianoche */}
             {nightMode && (
               <line
                 x1={0} y1={hourToY(12)} x2={svgW} y2={hourToY(12)}
@@ -175,33 +160,40 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
               />
             )}
 
-            {/* Columnas */}
             {columns.map((col, i) => {
               const x = i * COL_W
+              const weekend = isWeekend(col.key)
+
               return (
                 <g key={col.key}>
-                  {/* Fondo alternante */}
                   <rect
                     x={x} y={TOP} width={COL_W} height={CHART_H}
                     fill={i % 2 === 0 ? 'rgba(26,29,46,0.4)' : 'rgba(36,39,70,0.2)'}
                   />
 
-                  {/* Separador vertical */}
+                  {weekend && (
+                    <rect
+                      x={x} y={TOP} width={COL_W} height={CHART_H}
+                      fill={C.primary} fillOpacity={0.06}
+                    />
+                  )}
+
                   <line
                     x1={x} y1={0} x2={x} y2={totalH}
                     stroke="#2E3250" strokeWidth={0.5}
                   />
 
-                  {/* Etiqueta de fecha */}
                   <text
                     x={x + COL_W / 2} y={TOP - 8}
                     textAnchor="middle"
-                    fill="#E8EAF6" fontSize={10} opacity={0.6}
+                    fill={weekend ? C.primary : "#E8EAF6"}
+                    fontSize={10}
+                    opacity={weekend ? 0.9 : 0.6}
+                    fontWeight={weekend ? 600 : 400}
                   >
                     {col.label}
                   </text>
 
-                  {/* Eventos */}
                   {col.events.map((ev, j) => {
                     const PAD = 5
                     const ey = hourToY(ev.displayHour)
@@ -211,10 +203,10 @@ function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate']
                         key={j}
                         x={x + PAD} y={ey}
                         width={COL_W - PAD * 2} height={eh}
-                        fill={STATUS_COLORS[ev.status]}
+                        fill={STATUS_COLORS[ev.status as keyof typeof STATUS_COLORS]}
                         rx={3} opacity={0.85}
                       >
-                        <title>{`${STATUS_LABELS[ev.status]}\n${ev.startTimeStr} – ${ev.endTimeStr}\n${ev.durationStr}`}</title>
+                        <title>{`${STATUS_LABELS[ev.status as keyof typeof STATUS_LABELS]}\n${ev.startTimeStr} – ${ev.endTimeStr}\n${ev.durationStr}`}</title>
                       </rect>
                     )
                   })}
@@ -306,6 +298,46 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
   // Extraemos los nombres únicos de las ventanas para pintar los colores
   const windowNames = [...new Set(wakeWindows.map((w: any) => w.windowName))];
 
+  const napsCountByDay = Object.values(napRaw.reduce((acc: any, nap: any) => {
+    if (!acc[nap.date]) acc[nap.date] = { date: nap.date, count: 0 }
+    acc[nap.date].count += 1
+    return acc
+  }, {}))
+
+  const napsCountWithTrend = withTrend(napsCountByDay, 'count')
+
+  const nightWakingsPadded = dailySleep.map(day => {
+    const existing = nightWakingsByDay.find(nw => nw.date === day.date)
+    return existing || { date: day.date, totalMin: 0, count: 0 }
+  })
+
+  const nightWakingScatterPadded = dailySleep.flatMap(day => {
+    const wakings = nightWakingScatter.filter(nw => nw.date === day.date)
+    if (wakings.length === 0) {
+      return [{
+        date: day.date,
+        hourDecimal: null as any,
+        durationMin: 0,
+        timeStr: '',
+        durationStr: ''
+      }]
+    }
+    return wakings.map(d => ({
+      ...d,
+      hourDecimal: d.hourDecimal < 18 ? d.hourDecimal + 24 : d.hourDecimal
+    }))
+  })
+
+  const wakingsCountPadded = dailySleep.map(day => {
+    const existing = nightWakingsByDay.find(nw => nw.date === day.date)
+    return {
+      date: day.date,
+      count: existing ? existing.count : 0
+    }
+  })
+
+  const wakingsCountWithTrend = withTrend(wakingsCountPadded, 'count')
+
   const tabsData = [
     {
       label: 'Timeline',
@@ -327,8 +359,19 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <ResponsiveContainer width="100%" height={280}>
               <ComposedChart data={dailySleepData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={TICK_STYLE} />
-                <YAxis domain={[0, 24]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v}h`} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis allowDecimals={false} domain={[0, 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
+                {renderMonthDividers(wakeChartData, C.primary)}
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)}h`} />} />
                 <Area type="monotone" dataKey="totalHours" name="Sueño total" stroke={C.primary} fill={C.primary} fillOpacity={0.15} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 <Line type="monotone" dataKey="totalHoursTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
@@ -342,8 +385,19 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={wakeUpData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={TICK_STYLE} />
-                <YAxis domain={[4, 12]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis domain={['dataMax - 0.5', 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                {renderMonthDividers(wakeChartData, C.primary)}
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${formatHour(v)}h`} />} />
                 <Line type="monotone" dataKey="hourDecimal" name="Despertar" stroke="#FFB74D" strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 <Line type="monotone" dataKey="hourDecimalTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
@@ -357,8 +411,20 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <ResponsiveContainer width="100%" height={240}>
               <LineChart data={bedTimesData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={TICK_STYLE} />
-                <YAxis domain={[16, 24]} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis domain={['dataMax - 0.5', 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={formatHour} />
+                {renderMonthDividers(wakeChartData, C.primary)}
+
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${formatHour(v)}h`} />} />
                 <Line type="monotone" dataKey="hourDecimal" name="Hora dormir" stroke={C.error} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />
                 <Line type="monotone" dataKey="hourDecimalTrend" name="Tendencia" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
@@ -374,12 +440,76 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
       content: (
         <div className="space-y-8 animate-in fade-in duration-500">
           <div>
+            <h3 className="text-sm font-medium text-onSurface mb-3">Cantidad de siestas por día</h3>
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={napsCountWithTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis allowDecimals={false} domain={[0, 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
+                {renderMonthDividers(wakeChartData, C.primary)}
+                <Tooltip
+                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const d = payload[0].payload
+                    return (
+                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
+                        <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+
+                        <div className="flex justify-between items-center gap-4 my-1">
+                          <span className="text-primary/80">Total siestas</span>
+                          <span className="text-primary font-bold">{d.count}</span>
+                        </div>
+
+                        {d.countTrend !== null && d.countTrend !== undefined && (
+                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                            <span className="text-[#8B5CF6]">Tendencia Gral.</span>
+                            <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="count" name="Total siestas" fill={C.primary} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Duración de siestas por día</h3>
             <ResponsiveContainer width="100%" height={300}>
               <ComposedChart data={napStackWithTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}h`} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis
+                  name="Horas"
+                  domain={[0, 'dataMax + 0.5']}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={v => `${v.toFixed(1)}h`}
+                />
+                {renderMonthDividers(wakeChartData, C.primary)}
+
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(2)}h`} />} />
                 <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
                 {napRanks.map((rank: any, i: number) => (
@@ -396,8 +526,25 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <ResponsiveContainer width="100%" height={280}>
               <ComposedChart data={wakeChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
-                <YAxis name="Horas" tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(1)}h`} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
+                <YAxis
+                  name="Horas"
+                  domain={[0, 'dataMax + 0.5']}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={v => `${v.toFixed(1)}h`}
+                />
+
+                {renderMonthDividers(wakeChartData, C.primary)}
 
                 <Tooltip
                   cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
@@ -434,7 +581,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                     dataKey={name}
                     type="monotone"
                     stroke="transparent"
-                    dot={{ r: 4, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
+                    dot={{ r: 4, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0, opacity: 0.6 }}
                     activeDot={{ r: 6, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
                   />
                 ))}
@@ -461,14 +608,74 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
       label: 'Despertares',
       content: (
         <div className="space-y-8 animate-in fade-in duration-500">
+
+          <div>
+            <h3 className="text-sm font-medium text-onSurface mb-1">Cantidad de despertares por noche</h3>
+            <p className="text-xs text-onSurface/40 mb-3">Número total de veces que se ha despertado durante la noche</p>
+            <ResponsiveContainer width="100%" height={240}>
+              <ComposedChart data={wakingsCountWithTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    return `${d.getDate()} ${d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}`;
+                  }}
+                />
+                <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 11 }} />
+                {renderMonthDividers(dailySleep, C.primary)}
+
+                <Tooltip
+                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
+                  content={({ active, payload }) => {
+                    if (!active || !payload?.length) return null
+                    const d = payload[0].payload
+                    return (
+                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
+                        <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+
+                        <div className="flex justify-between items-center gap-4 my-1">
+                          <span className="text-error/80">Despertares</span>
+                          <span className="text-error font-bold">{d.count}</span>
+                        </div>
+
+                        {d.countTrend !== null && d.countTrend !== undefined && (
+                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                            <span className="text-[#8B5CF6]">Tendencia Gral.</span>
+                            <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )
+                  }}
+                />
+                <Bar dataKey="count" name="Despertares" fill={C.error} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Tiempo total despierto por noche</h3>
             <p className="text-xs text-onSurface/40 mb-3">Suma de duración de todos los despertares nocturnos</p>
             <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={nightWakingsByDay}>
+              <BarChart data={nightWakingsPadded}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" tick={{ fill: C.muted, fontSize: 11 }} />
+                <XAxis
+                  dataKey="date"
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    const d = new Date(v);
+                    // Devuelve "lun 15"
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
                 <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}m`} />
+                {renderMonthDividers(wakeChartData, C.primary)}
+
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)} min`} />} />
                 <Bar dataKey="totalMin" name="Minutos despierto" fill={C.error} radius={[4, 4, 0, 0]} fillOpacity={0.8} />
               </BarChart>
@@ -481,15 +688,31 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
             <ResponsiveContainer width="100%" height={300}>
               <ScatterChart>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="date" type="category" tick={{ fill: C.muted, fontSize: 11 }} />
+                <XAxis
+                  dataKey="date"
+                  type="category"
+                  allowDuplicatedCategory={false}
+                  minTickGap={20}
+                  tick={{ fill: C.muted, fontSize: 11 }}
+                  tickFormatter={(v) => {
+                    if (!v) return '';
+                    const d = new Date(v);
+                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                    return `${weekday} ${d.getDate()}`;
+                  }}
+                />
                 <YAxis dataKey="hourDecimal" name="Hora" tick={{ fill: C.muted, fontSize: 11 }}
                   domain={[18, 30]} tickFormatter={v => formatHour(v % 24)} />
+                <ZAxis dataKey="durationMin" range={[20, 400]} />
+
+                {renderMonthDividers(dailySleep, C.primary)}
+
                 <Tooltip cursor={{ stroke: C.outline }}
                   content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
+                    if (!active || !payload?.length || !payload[0].payload.timeStr) return null
                     const d = payload[0].payload
                     return (
-                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs">
+                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl">
                         <p className="text-onSurface/60">{d.date}</p>
                         <p className="text-error">Hora: <span className="font-medium">{d.timeStr}</span></p>
                         <p className="text-error">Duración: <span className="font-medium">{d.durationStr}</span></p>
@@ -498,10 +721,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   }}
                 />
                 <Scatter
-                  data={nightWakingScatter.map((d: any) => ({
-                    ...d,
-                    hourDecimal: d.hourDecimal < 18 ? d.hourDecimal + 24 : d.hourDecimal
-                  }))}
+                  data={nightWakingScatterPadded}
                   fill={C.error}
                   fillOpacity={0.7}
                 />
