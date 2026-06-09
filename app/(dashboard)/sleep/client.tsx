@@ -12,21 +12,15 @@ import { SleepStats } from './data'
 import { DashboardSection, ChartTooltip, C } from '@/components/dashboard-section'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { renderMonthDividers } from '@/components/month-divider'
+import { formatHour, isWeekend, withTrend } from '@/utils/utils'
 
 const TICK_STYLE = { fill: '#E8EAF6', fontSize: 11, opacity: 0.5 }
 
-const formatHour = (v: number) => {
-  const h = Math.floor(v) % 24
-  const m = Math.round((v % 1) * 60)
-  return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`
-}
-
-
 const STATUS_COLORS: Record<string, string> = {
-  night_solid: '#6BCFA0',  // verde menta   → positivo, descanso sólido
-  night_interrupted: '#FFAA60',  // ámbar         → alerta, sueño comprometido
-  night_waking: '#FF5C5C',  // rojo vivo     → despertar, interrupción
-  nap: '#A78BFA',  // violeta        → categoría propia, claramente distinta
+  night_solid: '#6BCFA0',
+  night_interrupted: '#FFAA60',
+  night_waking: '#FF5C5C',
+  nap: '#A78BFA',
 }
 const STATUS_LABELS: Record<string, string> = {
   night_solid: 'Sueño sólido',
@@ -47,12 +41,7 @@ const durToH = (d: number) => (d / 24) * CHART_H
 
 function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] }) {
   const [nightMode, setNightMode] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)
-
-  const isWeekend = (dateStr: string) => {
-    const d = new Date(dateStr)
-    return d.getDay() === 0 || d.getDay() === 6
-  }
+  const scrollRef = useRef<HTMLDivElement>(null)  
 
   useEffect(() => {
     if (scrollRef.current)
@@ -243,24 +232,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
     { icon: Clock, label: "Hora de dormir", value: kpis.avgBedTime, iconColorClass: "text-secondary bg-secondary/20" },
     { icon: BellRing, label: "Despertares noct", value: kpis.avgNightWakings, iconColorClass: "text-error bg-error/20" },
   ]
-
-  const withTrend = (data: any[], key: string) => {
-    return data.map((item, idx) => {
-      let sum = 0;
-      let count = 0;
-      for (let i = Math.max(0, idx - 2); i <= Math.min(data.length - 1, idx + 2); i++) {
-        if (data[i][key] !== undefined && data[i][key] !== null) {
-          sum += data[i][key];
-          count++;
-        }
-      }
-      return {
-        ...item,
-        [`${key}Trend`]: count > 0 ? sum / count : null
-      };
-    });
-  };
-
+  
   const dailySleepData = withTrend(dailySleep, 'totalHours');
   const wakeUpData = withTrend(wakeUpTimes, 'hourDecimal');
   const bedTimesData = withTrend(bedTimes, 'hourDecimal');
@@ -271,31 +243,21 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
   });
   const napStackWithTrend = withTrend(napStackWithTotal, 'totalNaps');
 
-  // 1. Agrupamos todas las ventanas y promedios por día en un solo objeto
   const wakeByDate = wakeWindows.reduce((acc: any, w: any) => {
     if (!acc[w.date]) acc[w.date] = { date: w.date, sum: 0, count: 0, windows: [] };
-
-    // Guardamos la ventana específica como una columna para los puntos (Scatter)
     acc[w.date][w.windowName] = w.durationHours;
-
-    // Guardamos los datos legibles para el Tooltip
     acc[w.date].windows.push({ name: w.windowName, str: w.durationStr });
-
     acc[w.date].sum += w.durationHours;
     acc[w.date].count += 1;
     return acc;
   }, {});
 
-  // 2. Calculamos el promedio diario
   const dailyWakeAvg = Object.values(wakeByDate).map((d: any) => ({
     ...d,
     avgWindow: d.sum / d.count
   }));
 
-  // 3. Aplicamos la tendencia
   const wakeChartData = withTrend(dailyWakeAvg, 'avgWindow');
-
-  // Extraemos los nombres únicos de las ventanas para pintar los colores
   const windowNames = [...new Set(wakeWindows.map((w: any) => w.windowName))];
 
   const napsCountByDay = Object.values(napRaw.reduce((acc: any, nap: any) => {
@@ -365,12 +327,11 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
                   tick={{ fill: C.muted, fontSize: 11 }}
                   tickFormatter={(v) => {
                     const d = new Date(v);
-                    // Devuelve "lun 15"
                     const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
                     return `${weekday} ${d.getDate()}`;
                   }}
                 />
-                <YAxis allowDecimals={false} domain={[0, 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
+                <YAxis allowDecimals={false} domain={['dataMax - 0.5', 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
                 {renderMonthDividers(wakeChartData, C.primary)}
                 <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)}h`} />} />
                 <Area type="monotone" dataKey="totalHours" name="Sueño total" stroke={C.primary} fill={C.primary} fillOpacity={0.15} strokeWidth={2} dot={false} activeDot={{ r: 4 }} />

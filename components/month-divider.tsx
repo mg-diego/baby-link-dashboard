@@ -1,25 +1,35 @@
-import { ReferenceLine } from 'recharts'
+import { ReferenceLine } from "recharts"
 
 export const renderMonthDividers = (data: any[], primary: any) => {
-  const boundaries: { date: string, label: string }[] = [];
-  let lastMonth = '';
+  const boundaries: { date: string, label: string }[] = []
+  let lastMonth = ''
 
   data.forEach((d) => {
-    if (!d?.date) return;
+    if (!d?.date) return
     
-    const currentMonth = d.date.substring(0, 7); // Extrae "YYYY-MM"
+    let dObj = new Date(typeof d.date === 'string' && d.date.includes(' ') ? d.date.replace(' ', 'T') : d.date)
+
+    if (isNaN(dObj.getTime()) && typeof d.date === 'string') {
+      const parts = d.date.split(/[-/]/)
+      if (parts.length === 3) {
+        const year = parts[2].length === 4 ? parts[2] : parts[0]
+        const day = parts[2].length === 4 ? parts[0] : parts[2]
+        dObj = new Date(`${year}-${parts[1]}-${day}T00:00:00`)
+      }
+    }
+
+    if (isNaN(dObj.getTime())) return
     
-    // Si ya teníamos un mes registrado y el actual es diferente, ¡hay salto de mes!
-    if (lastMonth && currentMonth !== lastMonth) {
-      const dateObj = new Date(d.date);
+    const currentMonth = `${dObj.getFullYear()}-${(dObj.getMonth() + 1).toString().padStart(2, '0')}`
+        
+    if (currentMonth !== lastMonth) {
       boundaries.push({
         date: d.date,
-        // Formatea el nombre del mes (ej: "JUN")
-        label: dateObj.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()
-      });
+        label: dObj.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase()
+      })
     }
-    lastMonth = currentMonth;
-  });
+    lastMonth = currentMonth
+  })
 
   return boundaries.map(b => (
     <ReferenceLine 
@@ -34,8 +44,8 @@ export const renderMonthDividers = (data: any[], primary: any) => {
         fill: primary, 
         fontSize: 10, 
         fontWeight: 'bold',
-        offset: 10 // Lo separa un poco de la línea
+        offset: 10
       }} 
     />
-  ));
-};
+  ))
+}

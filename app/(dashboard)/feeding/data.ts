@@ -37,13 +37,14 @@ export async function getFeedStats(babyId: string, startDate?: string, endDate?:
 
     if (ev.end_time && type === 'nursing') {
       const endObj = new Date(ev.end_time)
-      durationMins = (endObj.getTime() - dateObj.getTime()) / 60000
+      durationMins = Math.round((endObj.getTime() - dateObj.getTime()) / 60000)
     }
 
     return {
       type,
-      dateStr: dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
       dateRaw: dateObj.toISOString().split('T')[0],
+      timestamp: dateObj.getTime(),
+      hourDecimal: dateObj.getHours() + (dateObj.getMinutes() / 60),
       amountMl,
       durationMins,
       condition: meta.condition || 'U',
@@ -55,43 +56,87 @@ export async function getFeedStats(babyId: string, startDate?: string, endDate?:
   const activeDays = Math.max(uniqueDays, 1)
 
   const compositionMap = new Map()
-  const bottleMap = new Map()
   const nursingMap = new Map()
+  const bottleByTypeMap = new Map()
+  const milkTypesSet = new Set<string>()
+  const nursingGapsMap = new Map()
+
+  let lastNursingTime: number | null = null
+  const bottleScatter: any[] = []
 
   processed.forEach(p => {
+    // 1. Composición general
     if (!compositionMap.has(p.dateRaw)) {
-      compositionMap.set(p.dateRaw, { date: p.dateStr, bottle: 0, nursing: 0, solids: 0 })
+      compositionMap.set(p.dateRaw, { date: p.dateRaw, bottle: 0, nursing: 0, solids: 0 })
     }
     const dayComp = compositionMap.get(p.dateRaw)
     if (p.type === 'bottle') dayComp.bottle += 1
     if (p.type === 'nursing') dayComp.nursing += 1
     if (p.type === 'solids') dayComp.solids += 1
 
+    // 2. Lógica para biberones
     if (p.type === 'bottle') {
-      if (!bottleMap.has(p.dateRaw)) {
-        bottleMap.set(p.dateRaw, { date: p.dateStr, totalMl: 0 })
+      const mType = p.milkType || 'Unknown'
+      milkTypesSet.add(mType)
+
+      // Cantidad por tipo y día
+      if (!bottleByTypeMap.has(p.dateRaw)) {
+        bottleByTypeMap.set(p.dateRaw, { date: p.dateRaw })
       }
-      bottleMap.get(p.dateRaw).totalMl += p.amountMl
+      const bMap = bottleByTypeMap.get(p.dateRaw)
+      bMap[mType] = (bMap[mType] || 0) + p.amountMl
+
+      // Puntos para el ScatterChart
+      bottleScatter.push({
+        date: p.dateRaw,
+        hourDecimal: p.hourDecimal,
+        amountMl: p.amountMl,
+        milkType: mType
+      })
     }
 
+    // 3. Lógica para pecho (nursing)
     if (p.type === 'nursing') {
+      // Tendencias y lados
       if (!nursingMap.has(p.dateRaw)) {
-        nursingMap.set(p.dateRaw, { date: p.dateStr, totalMins: 0, L: 0, R: 0, U: 0 })
+        nursingMap.set(p.dateRaw, { date: p.dateRaw, totalMins: 0, L: 0, R: 0, U: 0 })
       }
       const nMap = nursingMap.get(p.dateRaw)
       nMap.totalMins += p.durationMins
       if (p.condition === 'L') nMap.L += p.durationMins
       else if (p.condition === 'R') nMap.R += p.durationMins
       else nMap.U += p.durationMins
+
+      // Distancia entre tomas
+      if (!nursingGapsMap.has(p.dateRaw)) {
+        nursingGapsMap.set(p.dateRaw, { sum: 0, count: 0 })
+      }
+      if (lastNursingTime !== null) {
+        const gapH = (p.timestamp - lastNursingTime) / 3600000
+        // Filtramos gaps mayores a 24h para no distorsionar la media diaria
+        if (gapH < 24) {
+          nursingGapsMap.get(p.dateRaw).sum += gapH
+          nursingGapsMap.get(p.dateRaw).count += 1
+        }
+      }
+      lastNursingTime = p.timestamp
     }
   })
 
+  // Parsear mapas a arrays para los gráficos
   const dailyComposition = Array.from(compositionMap.values())
-  const bottleTrends = Array.from(bottleMap.values())
   const nursingTrends = Array.from(nursingMap.values())
+  const bottleByType = Array.from(bottleByTypeMap.values())
+  const milkTypes = Array.from(milkTypesSet)
+  
+  const nursingGaps = Array.from(nursingGapsMap.entries()).map(([date, data]) => ({
+    date,
+    avgGapH: data.count > 0 ? data.sum / data.count : null
+  })).filter(d => d.avgGapH !== null)
 
+  // Recalcular los totales para los KPIs
   const totalFeeds = processed.length
-  const totalMl = bottleTrends.reduce((acc, curr) => acc + curr.totalMl, 0)
+  const totalMl = bottleScatter.reduce((acc, curr) => acc + curr.amountMl, 0)
   const totalNursingMins = nursingTrends.reduce((acc, curr) => acc + curr.totalMins, 0)
 
   const kpis = {
@@ -100,5 +145,13 @@ export async function getFeedStats(babyId: string, startDate?: string, endDate?:
     avgNursingMins: (totalNursingMins / activeDays).toFixed(0)
   }
 
-  return { kpis, dailyComposition, bottleTrends, nursingTrends }
+  return { 
+    kpis, 
+    dailyComposition, 
+    nursingTrends, 
+    nursingGaps, 
+    bottleByType, 
+    bottleScatter, 
+    milkTypes 
+  }
 }
