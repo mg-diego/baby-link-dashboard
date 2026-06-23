@@ -13,6 +13,7 @@ import { DashboardSection, ChartTooltip, C } from '@/components/dashboard-sectio
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { renderMonthDividers } from '@/components/month-divider'
 import { formatHour, isWeekend, withTrend } from '@/utils/utils'
+import { ChartLazyLoader } from '@/components/chart-lazy-loader'
 
 const TICK_STYLE = { fill: '#E8EAF6', fontSize: 11, opacity: 0.5 }
 
@@ -41,7 +42,7 @@ const durToH = (d: number) => (d / 24) * CHART_H
 
 function SleepCalendar({ ganttByDate }: { ganttByDate: SleepStats['ganttByDate'] }) {
   const [nightMode, setNightMode] = useState(false)
-  const scrollRef = useRef<HTMLDivElement>(null)  
+  const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (scrollRef.current)
@@ -232,7 +233,7 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
     { icon: Clock, label: "Hora de dormir", value: kpis.avgBedTime, iconColorClass: "text-secondary bg-secondary/20" },
     { icon: BellRing, label: "Despertares noct", value: kpis.avgNightWakings, iconColorClass: "text-error bg-error/20" },
   ]
-  
+
   const dailySleepData = withTrend(dailySleep, 'totalHours');
   const wakeUpData = withTrend(wakeUpTimes, 'hourDecimal');
   const bedTimesData = withTrend(bedTimes, 'hourDecimal');
@@ -402,165 +403,171 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
         <div className="space-y-8 animate-in fade-in duration-500">
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Cantidad de siestas por día</h3>
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={napsCountWithTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    // Devuelve "lun 15"
-                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-                    return `${weekday} ${d.getDate()}`;
-                  }}
-                />
-                <YAxis allowDecimals={false} domain={[0, 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
-                {renderMonthDividers(wakeChartData, C.primary)}
-                <Tooltip
-                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
-                    return (
-                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
-                        <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={napsCountWithTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    minTickGap={20}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      // Devuelve "lun 15"
+                      const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                      return `${weekday} ${d.getDate()}`;
+                    }}
+                  />
+                  <YAxis allowDecimals={false} domain={[0, 'dataMax + 0.5']} tick={{ fill: C.muted, fontSize: 11 }} />
+                  {renderMonthDividers(wakeChartData, C.primary)}
+                  <Tooltip
+                    cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
+                          <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
 
-                        <div className="flex justify-between items-center gap-4 my-1">
-                          <span className="text-primary/80">Total siestas</span>
-                          <span className="text-primary font-bold">{d.count}</span>
-                        </div>
-
-                        {d.countTrend !== null && d.countTrend !== undefined && (
-                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
-                            <span className="text-[#8B5CF6]">Tendencia Gral.</span>
-                            <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                          <div className="flex justify-between items-center gap-4 my-1">
+                            <span className="text-primary/80">Total siestas</span>
+                            <span className="text-primary font-bold">{d.count}</span>
                           </div>
-                        )}
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="count" name="Total siestas" fill={C.primary} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
-              </ComposedChart>
-            </ResponsiveContainer>
+
+                          {d.countTrend !== null && d.countTrend !== undefined && (
+                            <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                              <span className="text-[#8B5CF6]">Tendencia Gral.</span>
+                              <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="count" name="Total siestas" fill={C.primary} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-3">Duración de siestas por día</h3>
-            <ResponsiveContainer width="100%" height={300}>
-              <ComposedChart data={napStackWithTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-                    return `${weekday} ${d.getDate()}`;
-                  }}
-                />
-                <YAxis
-                  name="Horas"
-                  domain={[0, 'dataMax + 0.5']}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={v => `${v.toFixed(1)}h`}
-                />
-                {renderMonthDividers(wakeChartData, C.primary)}
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={napStackWithTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    minTickGap={20}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                      return `${weekday} ${d.getDate()}`;
+                    }}
+                  />
+                  <YAxis
+                    name="Horas"
+                    domain={[0, 'dataMax + 0.5']}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={v => `${v.toFixed(1)}h`}
+                  />
+                  {renderMonthDividers(wakeChartData, C.primary)}
 
-                <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(2)}h`} />} />
-                <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
-                {napRanks.map((rank: any, i: number) => (
-                  <Bar key={rank} dataKey={rank} stackId="a" fill={NAP_COLORS[i % NAP_COLORS.length]} radius={i === napRanks.length - 1 ? [4, 4, 0, 0] : undefined} />
-                ))}
-                <Line type="monotone" dataKey="totalNapsTrend" name="Tendencia Total" stroke="#f6b15cff" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
-              </ComposedChart>
-            </ResponsiveContainer>
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(2)}h`} />} />
+                  <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
+                  {napRanks.map((rank: any, i: number) => (
+                    <Bar key={rank} dataKey={rank} stackId="a" fill={NAP_COLORS[i % NAP_COLORS.length]} radius={i === napRanks.length - 1 ? [4, 4, 0, 0] : undefined} />
+                  ))}
+                  <Line type="monotone" dataKey="totalNapsTrend" name="Tendencia Total" stroke="#f6b15cff" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Ventanas de vigilia</h3>
             <p className="text-xs text-onSurface/40 mb-3">Tiempo despierto entre siesta y siesta / hora de dormir</p>
-            <ResponsiveContainer width="100%" height={280}>
-              <ComposedChart data={wakeChartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    // Devuelve "lun 15"
-                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-                    return `${weekday} ${d.getDate()}`;
-                  }}
-                />
-                <YAxis
-                  name="Horas"
-                  domain={[0, 'dataMax + 0.5']}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={v => `${v.toFixed(1)}h`}
-                />
-
-                {renderMonthDividers(wakeChartData, C.primary)}
-
-                <Tooltip
-                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null;
-                    const d = payload[0].payload;
-
-                    return (
-                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs min-w-[160px]">
-                        <p className="text-onSurface/60 font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
-
-                        {d.windows?.map((win: any) => (
-                          <div key={win.name} className="flex justify-between items-center gap-4 my-1">
-                            <span className="text-primary/80">{win.name}</span>
-                            <span className="text-primary font-bold">{win.str}</span>
-                          </div>
-                        ))}
-
-                        {d.avgWindowTrend !== null && d.avgWindowTrend !== undefined && (
-                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
-                            <span className="text-[#f6b15c]">Tendencia Gral.</span>
-                            <span className="text-[#f6b15c] font-bold">{d.avgWindowTrend.toFixed(1)}h</span>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  }}
-                />
-
-                {windowNames.map((name: any, i: number) => (
-                  <Line
-                    key={name}
-                    name={name}
-                    dataKey={name}
-                    type="monotone"
-                    stroke="transparent"
-                    dot={{ r: 4, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0, opacity: 0.6 }}
-                    activeDot={{ r: 6, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={wakeChartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    minTickGap={20}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      // Devuelve "lun 15"
+                      const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                      return `${weekday} ${d.getDate()}`;
+                    }}
                   />
-                ))}
+                  <YAxis
+                    name="Horas"
+                    domain={[0, 'dataMax + 0.5']}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={v => `${v.toFixed(1)}h`}
+                  />
 
-                <Line
-                  type="monotone"
-                  dataKey="avgWindowTrend"
-                  name="Tendencia Promedio"
-                  stroke="#f6b15cff"
-                  strokeWidth={3}
-                  dot={false}
-                  activeDot={false}
-                  strokeDasharray="5 5"
-                />
+                  {renderMonthDividers(wakeChartData, C.primary)}
 
-                <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
-              </ComposedChart>
-            </ResponsiveContainer>
+                  <Tooltip
+                    cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null;
+                      const d = payload[0].payload;
+
+                      return (
+                        <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs min-w-[160px]">
+                          <p className="text-onSurface/60 font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+
+                          {d.windows?.map((win: any) => (
+                            <div key={win.name} className="flex justify-between items-center gap-4 my-1">
+                              <span className="text-primary/80">{win.name}</span>
+                              <span className="text-primary font-bold">{win.str}</span>
+                            </div>
+                          ))}
+
+                          {d.avgWindowTrend !== null && d.avgWindowTrend !== undefined && (
+                            <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                              <span className="text-[#f6b15c]">Tendencia Gral.</span>
+                              <span className="text-[#f6b15c] font-bold">{d.avgWindowTrend.toFixed(1)}h</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }}
+                  />
+
+                  {windowNames.map((name: any, i: number) => (
+                    <Line
+                      key={name}
+                      name={name}
+                      dataKey={name}
+                      type="monotone"
+                      stroke="transparent"
+                      dot={{ r: 4, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0, opacity: 0.6 }}
+                      activeDot={{ r: 6, fill: NAP_COLORS[i % NAP_COLORS.length], strokeWidth: 0 }}
+                    />
+                  ))}
+
+                  <Line
+                    type="monotone"
+                    dataKey="avgWindowTrend"
+                    name="Tendencia Promedio"
+                    stroke="#f6b15cff"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={false}
+                    strokeDasharray="5 5"
+                  />
+
+                  <Legend wrapperStyle={{ color: C.muted, fontSize: 12 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
         </div>
       )
@@ -573,144 +580,152 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Cantidad de despertares por noche</h3>
             <p className="text-xs text-onSurface/40 mb-3">Número total de veces que se ha despertado durante la noche</p>
-            <ResponsiveContainer width="100%" height={240}>
-              <ComposedChart data={wakingsCountWithTrend}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    return `${d.getDate()} ${d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}`;
-                  }}
-                />
-                <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 11 }} />
-                {renderMonthDividers(dailySleep, C.primary)}
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ComposedChart data={wakingsCountWithTrend}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      return `${d.getDate()} ${d.toLocaleDateString('es-ES', { month: 'short' }).replace('.', '')}`;
+                    }}
+                  />
+                  <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 11 }} />
+                  {renderMonthDividers(dailySleep, C.primary)}
 
-                <Tooltip
-                  cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length) return null
-                    const d = payload[0].payload
-                    return (
-                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
-                        <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
+                  <Tooltip
+                    cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
+                          <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
 
-                        <div className="flex justify-between items-center gap-4 my-1">
-                          <span className="text-error/80">Despertares</span>
-                          <span className="text-error font-bold">{d.count}</span>
-                        </div>
-
-                        {d.countTrend !== null && d.countTrend !== undefined && (
-                          <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
-                            <span className="text-[#8B5CF6]">Tendencia Gral.</span>
-                            <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                          <div className="flex justify-between items-center gap-4 my-1">
+                            <span className="text-error/80">Despertares</span>
+                            <span className="text-error font-bold">{d.count}</span>
                           </div>
-                        )}
-                      </div>
-                    )
-                  }}
-                />
-                <Bar dataKey="count" name="Despertares" fill={C.error} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
-                <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
-              </ComposedChart>
-            </ResponsiveContainer>
+
+                          {d.countTrend !== null && d.countTrend !== undefined && (
+                            <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
+                              <span className="text-[#8B5CF6]">Tendencia Gral.</span>
+                              <span className="text-[#8B5CF6] font-bold">{d.countTrend.toFixed(1)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )
+                    }}
+                  />
+                  <Bar dataKey="count" name="Despertares" fill={C.error} opacity={0.8} radius={[4, 4, 0, 0]} maxBarSize={32} />
+                  <Line type="monotone" dataKey="countTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Tiempo total despierto por noche</h3>
             <p className="text-xs text-onSurface/40 mb-3">Suma de duración de todos los despertares nocturnos</p>
-            <ResponsiveContainer width="100%" height={240}>
-              <BarChart data={nightWakingsPadded}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    const d = new Date(v);
-                    // Devuelve "lun 15"
-                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-                    return `${weekday} ${d.getDate()}`;
-                  }}
-                />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}m`} />
-                {renderMonthDividers(wakeChartData, C.primary)}
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={nightWakingsPadded}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    minTickGap={20}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      const d = new Date(v);
+                      // Devuelve "lun 15"
+                      const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                      return `${weekday} ${d.getDate()}`;
+                    }}
+                  />
+                  <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v.toFixed(0)}m`} />
+                  {renderMonthDividers(wakeChartData, C.primary)}
 
-                <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)} min`} />} />
-                <Bar dataKey="totalMin" name="Minutos despierto" fill={C.error} radius={[4, 4, 0, 0]} fillOpacity={0.8} />
-              </BarChart>
-            </ResponsiveContainer>
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v.toFixed(1)} min`} />} />
+                  <Bar dataKey="totalMin" name="Minutos despierto" fill={C.error} radius={[4, 4, 0, 0]} fillOpacity={0.8} />
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Distribución horaria de despertares</h3>
             <p className="text-xs text-onSurface/40 mb-3">Burbujas más grandes = despertares más largos</p>
-            <ResponsiveContainer width="100%" height={300}>
-              <ScatterChart>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis
-                  dataKey="date"
-                  type="category"
-                  allowDuplicatedCategory={false}
-                  minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }}
-                  tickFormatter={(v) => {
-                    if (!v) return '';
-                    const d = new Date(v);
-                    const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
-                    return `${weekday} ${d.getDate()}`;
-                  }}
-                />
-                <YAxis dataKey="hourDecimal" name="Hora" tick={{ fill: C.muted, fontSize: 11 }}
-                  domain={[18, 30]} tickFormatter={v => formatHour(v % 24)} />
-                <ZAxis dataKey="durationMin" range={[20, 400]} />
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis
+                    dataKey="date"
+                    type="category"
+                    allowDuplicatedCategory={false}
+                    minTickGap={20}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={(v) => {
+                      if (!v) return '';
+                      const d = new Date(v);
+                      const weekday = d.toLocaleDateString('es-ES', { weekday: 'short' }).replace('.', '');
+                      return `${weekday} ${d.getDate()}`;
+                    }}
+                  />
+                  <YAxis dataKey="hourDecimal" name="Hora" tick={{ fill: C.muted, fontSize: 11 }}
+                    domain={[18, 30]} tickFormatter={v => formatHour(v % 24)} />
+                  <ZAxis dataKey="durationMin" range={[20, 400]} />
 
-                {renderMonthDividers(dailySleep, C.primary)}
+                  {renderMonthDividers(dailySleep, C.primary)}
 
-                <Tooltip cursor={{ stroke: C.outline }}
-                  content={({ active, payload }) => {
-                    if (!active || !payload?.length || !payload[0].payload.timeStr) return null
-                    const d = payload[0].payload
-                    return (
-                      <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl">
-                        <p className="text-onSurface/60">{d.date}</p>
-                        <p className="text-error">Hora: <span className="font-medium">{d.timeStr}</span></p>
-                        <p className="text-error">Duración: <span className="font-medium">{d.durationStr}</span></p>
-                      </div>
-                    )
-                  }}
-                />
-                <Scatter
-                  data={nightWakingScatterPadded}
-                  fill={C.error}
-                  fillOpacity={0.7}
-                />
-              </ScatterChart>
-            </ResponsiveContainer>
+                  <Tooltip cursor={{ stroke: C.outline }}
+                    content={({ active, payload }) => {
+                      if (!active || !payload?.length || !payload[0].payload.timeStr) return null
+                      const d = payload[0].payload
+                      return (
+                        <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl">
+                          <p className="text-onSurface/60">{d.date}</p>
+                          <p className="text-error">Hora: <span className="font-medium">{d.timeStr}</span></p>
+                          <p className="text-error">Duración: <span className="font-medium">{d.durationStr}</span></p>
+                        </div>
+                      )
+                    }}
+                  />
+                  <Scatter
+                    data={nightWakingScatterPadded}
+                    fill={C.error}
+                    fillOpacity={0.7}
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">La "hora maldita" 🕰️</h3>
             <p className="text-xs text-onSurface/40 mb-3">Distribución de despertares por hora</p>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={cursedHour}>
-                <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis dataKey="hour" tick={{ fill: C.muted, fontSize: 10 }}
-                  interval={3} />
-                <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
-                <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} veces`} />} />
-                <Bar dataKey="count" name="Despertares" radius={[3, 3, 0, 0]}>
-                  {cursedHour.map((entry: any, i: number) => (
-                    <Cell
-                      key={i}
-                      fill={C.error}
-                      fillOpacity={entry.count === maxCursed ? 1 : 0.2 + (entry.count / maxCursed) * 0.6}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
+            <ChartLazyLoader height={300}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={cursedHour}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                  <XAxis dataKey="hour" tick={{ fill: C.muted, fontSize: 10 }}
+                    interval={3} />
+                  <YAxis tick={{ fill: C.muted, fontSize: 11 }} allowDecimals={false} />
+                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} veces`} />} />
+                  <Bar dataKey="count" name="Despertares" radius={[3, 3, 0, 0]}>
+                    {cursedHour.map((entry: any, i: number) => (
+                      <Cell
+                        key={i}
+                        fill={C.error}
+                        fillOpacity={entry.count === maxCursed ? 1 : 0.2 + (entry.count / maxCursed) * 0.6}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </ChartLazyLoader>
           </div>
         </div>
       )
@@ -784,24 +799,26 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
               <p className="text-xs text-onSurface/40 mb-3">
                 Minutos de error. Arriba del 0 = durmió más tarde de lo predicho.
               </p>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={safePredictions.bedtime}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
-                  <XAxis dataKey="date" type="category" tick={TICK_STYLE} />
-                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
-                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
-                  <ReferenceLine y={0} stroke={C.muted} />
-                  <Bar
-                    dataKey="errorMinutes"
-                    name="Desviación"
-                    shape={(props: any) => {
-                      const err = Math.abs(props.payload.errorMinutes);
-                      const color = err <= BEDTIME_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
-                      return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartLazyLoader height={300}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={safePredictions.bedtime}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
+                    <XAxis dataKey="date" type="category" tick={TICK_STYLE} />
+                    <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                    <ReferenceLine y={0} stroke={C.muted} />
+                    <Bar
+                      dataKey="errorMinutes"
+                      name="Desviación"
+                      shape={(props: any) => {
+                        const err = Math.abs(props.payload.errorMinutes);
+                        const color = err <= BEDTIME_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
+                        return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartLazyLoader>
             </div>
 
             <div>
@@ -809,24 +826,26 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
               <p className="text-xs text-onSurface/40 mb-3">
                 Error en la hora a la que realmente se durmió vs la predicción.
               </p>
-              <ResponsiveContainer width="100%" height={280}>
-                <BarChart data={napStartChartData}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
-                  <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
-                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
-                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
-                  <ReferenceLine y={0} stroke={C.muted} />
-                  <Bar
-                    dataKey="errorStartMinutes"
-                    name="Desviación de Inicio"
-                    shape={(props: any) => {
-                      const err = Math.abs(props.payload.errorStartMinutes);
-                      const color = err <= NAP_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
-                      return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
-                    }}
-                  />
-                </BarChart>
-              </ResponsiveContainer>
+              <ChartLazyLoader height={300}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={napStartChartData}>
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke={C.outline} />
+                    <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
+                    <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                    <ReferenceLine y={0} stroke={C.muted} />
+                    <Bar
+                      dataKey="errorStartMinutes"
+                      name="Desviación de Inicio"
+                      shape={(props: any) => {
+                        const err = Math.abs(props.payload.errorStartMinutes);
+                        const color = err <= NAP_MARGIN ? '#4ADE80' : err <= 30 ? '#FACC15' : C.error;
+                        return <Rectangle {...props} fill={color} fillOpacity={0.85} />;
+                      }}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
+              </ChartLazyLoader>
             </div>
 
             <div>
@@ -834,17 +853,19 @@ export default function SleepClient({ stats }: { stats: SleepStats }) {
               <p className="text-xs text-onSurface/40 mb-3">
                 Comparativa de minutos reales vs los estimados por la IA.
               </p>
-              <ResponsiveContainer width="100%" height={280}>
-                <ComposedChart data={napStartChartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
-                  <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
-                  <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
-                  <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
-                  <Bar dataKey="realDuration" name="Duración Real" fill={C.secondary} radius={[4, 4, 0, 0]} maxBarSize={40} />
-                  <Line type="monotone" dataKey="predDuration" name="Estimación IA" stroke="#FFB74D" strokeWidth={3} dot={{ r: 4, fill: '#FFB74D' }} />
-                </ComposedChart>
-              </ResponsiveContainer>
+              <ChartLazyLoader height={300}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <ComposedChart data={napStartChartData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
+                    <XAxis dataKey="uniqueLabel" type="category" tick={TICK_STYLE} tickFormatter={(v) => v.split(' - ')[0]} />
+                    <YAxis tick={TICK_STYLE} tickFormatter={v => `${v}m`} />
+                    <Tooltip content={<ChartTooltip formatter={(v: number) => `${v} min`} />} cursor={{ fill: C.surfaceAlt }} />
+                    <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
+                    <Bar dataKey="realDuration" name="Duración Real" fill={C.secondary} radius={[4, 4, 0, 0]} maxBarSize={40} />
+                    <Line type="monotone" dataKey="predDuration" name="Estimación IA" stroke="#FFB74D" strokeWidth={3} dot={{ r: 4, fill: '#FFB74D' }} />
+                  </ComposedChart>
+                </ResponsiveContainer>
+              </ChartLazyLoader>
             </div>
 
           </div>

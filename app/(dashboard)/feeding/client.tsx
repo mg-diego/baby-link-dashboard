@@ -7,14 +7,15 @@ import { Utensils, Milk, Timer } from 'lucide-react'
 import { DashboardSection, C } from '@/components/dashboard-section'
 import { formatAxisDate, withTrend, formatHour } from '@/utils/utils'
 import { renderMonthDividers } from '@/components/month-divider'
+import { ChartLazyLoader } from '@/components/chart-lazy-loader'
 
 export default function FeedingClient({ stats }: { stats: any }) {
-  const { 
-    kpis, 
-    dailyComposition = [], 
-    nursingTrends = [], 
-    nursingGaps = [], 
-    bottleByType = [], 
+  const {
+    kpis,
+    dailyComposition = [],
+    nursingTrends = [],
+    nursingGaps = [],
+    bottleByType = [],
     bottleScatter = [],
     milkTypes = []
   } = stats
@@ -29,23 +30,23 @@ export default function FeedingClient({ stats }: { stats: any }) {
   const solidsWithTrend = withTrend(dailyComposition, 'solids')
 
   const kpiData = [
-    { 
-      icon: Utensils, 
-      label: "Tomas / Día", 
-      value: kpis?.avgFeeds || 0, 
-      iconColorClass: "text-primary bg-primary/20" 
+    {
+      icon: Utensils,
+      label: "Tomas / Día",
+      value: kpis?.avgFeeds || 0,
+      iconColorClass: "text-primary bg-primary/20"
     },
-    { 
-      icon: Milk, 
-      label: "Media Biberón (ml)", 
-      value: `${kpis?.avgMl || 0} ml`, 
-      iconColorClass: "text-secondary bg-secondary/20" 
+    {
+      icon: Milk,
+      label: "Media Biberón (ml)",
+      value: `${kpis?.avgMl || 0} ml`,
+      iconColorClass: "text-secondary bg-secondary/20"
     },
-    { 
-      icon: Timer, 
-      label: "Media Pecho (min)", 
-      value: `${kpis?.avgNursingMins || 0} m`, 
-      iconColorClass: "text-error bg-error/20" 
+    {
+      icon: Timer,
+      label: "Media Pecho (min)",
+      value: `${kpis?.avgNursingMins || 0} m`,
+      iconColorClass: "text-error bg-error/20"
     },
   ]
 
@@ -57,21 +58,21 @@ export default function FeedingClient({ stats }: { stats: any }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Minutos de Pecho Diarios</h3>
             <p className="text-xs text-onSurface/40 mb-3">Tiempo total al pecho desglosado por lado</p>
-            <div className="h-[300px]">
+            <ChartLazyLoader height={300}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={nursingWithTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     minTickGap={20}
-                    tick={{ fill: C.muted, fontSize: 11 }} 
+                    tick={{ fill: C.muted, fontSize: 11 }}
                     tickFormatter={formatAxisDate}
                   />
                   <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v}m`} />
-                  
+
                   {renderMonthDividers(nursingWithTrend, C.error)}
 
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -79,7 +80,7 @@ export default function FeedingClient({ stats }: { stats: any }) {
                       return (
                         <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-2xl min-w-[160px]">
                           <p className="text-onSurface font-medium mb-2 border-b border-outline/30 pb-1">{d.date}</p>
-                          
+
                           {(d.L > 0) && (
                             <div className="flex justify-between items-center gap-4 my-1">
                               <span className="text-error/80">Izquierdo</span>
@@ -98,7 +99,7 @@ export default function FeedingClient({ stats }: { stats: any }) {
                               <span style={{ color: '#DCA0A0' }} className="font-bold">{d.U} m</span>
                             </div>
                           )}
-                          
+
                           {d.totalMinsTrend !== null && d.totalMinsTrend !== undefined && (
                             <div className="flex justify-between items-center gap-4 mt-2 pt-1 border-t border-outline/30">
                               <span className="text-[#8B5CF6]">Tendencia Gral.</span>
@@ -107,7 +108,7 @@ export default function FeedingClient({ stats }: { stats: any }) {
                           )}
                         </div>
                       )
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
                   <Bar dataKey="L" name="Izquierdo" stackId="a" fill={C.error} radius={[0, 0, 4, 4]} maxBarSize={32} />
@@ -116,27 +117,27 @@ export default function FeedingClient({ stats }: { stats: any }) {
                   <Line type="monotone" dataKey="totalMinsTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Tiempo Medio Entre Tomas</h3>
             <p className="text-xs text-onSurface/40 mb-3">Distancia promedio en horas entre cada toma de pecho</p>
-            <div className="h-[240px]">
+            <ChartLazyLoader height={300}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={nursingGapsWithTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     minTickGap={20}
-                    tick={{ fill: C.muted, fontSize: 11 }} 
+                    tick={{ fill: C.muted, fontSize: 11 }}
                     tickFormatter={formatAxisDate}
                   />
                   <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v}h`} />
-                  
+
                   {renderMonthDividers(nursingGapsWithTrend, C.error)}
 
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -156,14 +157,14 @@ export default function FeedingClient({ stats }: { stats: any }) {
                           )}
                         </div>
                       )
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
                   <Bar dataKey="avgGapH" name="Promedio (Horas)" fill={C.error} radius={[4, 4, 0, 0]} maxBarSize={32} opacity={0.8} />
                   <Line type="monotone" dataKey="avgGapHTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </ChartLazyLoader>
           </div>
         </div>
       )
@@ -175,21 +176,21 @@ export default function FeedingClient({ stats }: { stats: any }) {
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Volumen Ingerido por Tipo</h3>
             <p className="text-xs text-onSurface/40 mb-3">Cantidad total diaria segmentada por tipo de leche</p>
-            <div className="h-[300px]">
+            <ChartLazyLoader height={300}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={bottleByType}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     minTickGap={20}
-                    tick={{ fill: C.muted, fontSize: 11 }} 
+                    tick={{ fill: C.muted, fontSize: 11 }}
                     tickFormatter={formatAxisDate}
                   />
                   <YAxis tick={{ fill: C.muted, fontSize: 11 }} tickFormatter={v => `${v}ml`} />
-                  
+
                   {renderMonthDividers(bottleByType, C.secondary)}
 
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -205,43 +206,43 @@ export default function FeedingClient({ stats }: { stats: any }) {
                           ))}
                         </div>
                       )
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
                   {milkTypes.map((type: string, i: number) => (
-                    <Bar 
-                      key={type} 
-                      dataKey={type} 
-                      name={type} 
-                      stackId="a" 
-                      fill={i % 2 === 0 ? C.secondary : '#7AD6D6'} 
-                      maxBarSize={32} 
+                    <Bar
+                      key={type}
+                      dataKey={type}
+                      name={type}
+                      stackId="a"
+                      fill={i % 2 === 0 ? C.secondary : '#7AD6D6'}
+                      maxBarSize={32}
                       radius={i === milkTypes.length - 1 ? [4, 4, 0, 0] : [0, 0, 0, 0]}
                     />
                   ))}
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Frecuencia de Biberones</h3>
             <p className="text-xs text-onSurface/40 mb-3">Cantidad total de tomas de biberón por día</p>
-            <div className="h-[240px]">
+            <ChartLazyLoader height={300}>
               <ResponsiveContainer width="100%" height="100%">
                 <ComposedChart data={bottleCountsWithTrend}>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis 
-                    dataKey="date" 
+                  <XAxis
+                    dataKey="date"
                     minTickGap={20}
-                    tick={{ fill: C.muted, fontSize: 11 }} 
+                    tick={{ fill: C.muted, fontSize: 11 }}
                     tickFormatter={formatAxisDate}
                   />
                   <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 11 }} />
-                  
+
                   {renderMonthDividers(bottleCountsWithTrend, C.secondary)}
 
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -261,40 +262,40 @@ export default function FeedingClient({ stats }: { stats: any }) {
                           )}
                         </div>
                       )
-                    }} 
+                    }}
                   />
                   <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
                   <Bar dataKey="bottle" name="Tomas" fill={C.secondary} radius={[4, 4, 0, 0]} maxBarSize={32} opacity={0.8} />
                   <Line type="monotone" dataKey="bottleTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
                 </ComposedChart>
               </ResponsiveContainer>
-            </div>
+            </ChartLazyLoader>
           </div>
 
           <div>
             <h3 className="text-sm font-medium text-onSurface mb-1">Distribución Horaria y Tamaños</h3>
             <p className="text-xs text-onSurface/40 mb-3">Relación entre la hora de la toma y la cantidad ingerida</p>
-            <div className="h-[300px]">
+            <ChartLazyLoader height={300}>
               <ResponsiveContainer width="100%" height="100%">
                 <ScatterChart>
                   <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                  <XAxis 
-                    dataKey="hourDecimal" 
-                    type="number" 
-                    domain={[0, 24]} 
-                    tick={{ fill: C.muted, fontSize: 11 }} 
-                    tickFormatter={v => `${Math.floor(v)}:00`} 
+                  <XAxis
+                    dataKey="hourDecimal"
+                    type="number"
+                    domain={[0, 24]}
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={v => `${Math.floor(v)}:00`}
                     name="Hora"
                   />
-                  <YAxis 
-                    dataKey="amountMl" 
-                    type="number" 
-                    tick={{ fill: C.muted, fontSize: 11 }} 
-                    tickFormatter={v => `${v}ml`} 
+                  <YAxis
+                    dataKey="amountMl"
+                    type="number"
+                    tick={{ fill: C.muted, fontSize: 11 }}
+                    tickFormatter={v => `${v}ml`}
                     name="Cantidad"
                   />
                   <ZAxis range={[60, 60]} />
-                  <Tooltip 
+                  <Tooltip
                     cursor={{ strokeDasharray: '3 3' }}
                     content={({ active, payload }) => {
                       if (!active || !payload?.length) return null
@@ -318,12 +319,12 @@ export default function FeedingClient({ stats }: { stats: any }) {
                           )}
                         </div>
                       )
-                    }} 
+                    }}
                   />
                   <Scatter data={bottleScatter} fill={C.secondary} fillOpacity={0.6} />
                 </ScatterChart>
               </ResponsiveContainer>
-            </div>
+            </ChartLazyLoader>
           </div>
         </div>
       )
@@ -334,21 +335,21 @@ export default function FeedingClient({ stats }: { stats: any }) {
         <div className="animate-in fade-in duration-500">
           <h3 className="text-sm font-medium text-onSurface mb-1">Tomas de Sólidos por Día</h3>
           <p className="text-xs text-onSurface/40 mb-3">Cantidad de veces que ha comido sólidos al día</p>
-          <div className="h-[300px]">
+          <ChartLazyLoader height={300}>
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart data={solidsWithTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke={C.outline} />
-                <XAxis 
-                  dataKey="date" 
+                <XAxis
+                  dataKey="date"
                   minTickGap={20}
-                  tick={{ fill: C.muted, fontSize: 11 }} 
+                  tick={{ fill: C.muted, fontSize: 11 }}
                   tickFormatter={formatAxisDate}
                 />
                 <YAxis allowDecimals={false} tick={{ fill: C.muted, fontSize: 11 }} />
-                
+
                 {renderMonthDividers(solidsWithTrend, C.primary)}
 
-                <Tooltip 
+                <Tooltip
                   cursor={{ fill: C.surfaceAlt, opacity: 0.4 }}
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null
@@ -368,21 +369,21 @@ export default function FeedingClient({ stats }: { stats: any }) {
                         )}
                       </div>
                     )
-                  }} 
+                  }}
                 />
                 <Legend wrapperStyle={{ color: C.muted, fontSize: 12, paddingTop: '10px' }} />
                 <Bar dataKey="solids" name="Tomas" fill={C.primary} radius={[4, 4, 0, 0]} maxBarSize={32} opacity={0.8} />
                 <Line type="monotone" dataKey="solidsTrend" name="Tendencia Promedio" stroke="#8B5CF6" strokeWidth={3} dot={false} activeDot={false} strokeDasharray="5 5" />
               </ComposedChart>
             </ResponsiveContainer>
-          </div>
+          </ChartLazyLoader>
         </div>
       )
     }
   ]
 
   return (
-    <DashboardSection 
+    <DashboardSection
       title="🍼 Alimentación"
       description="Análisis detallado de pecho, biberones y sólidos."
       kpis={kpiData}
