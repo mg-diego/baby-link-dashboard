@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient, fetchAllRows } from '@/utils/supabase/server'
 
 function classifyDiaper(metadata: any) {
   const text = [metadata?.condition, metadata?.notes, metadata?.status]
@@ -26,19 +26,21 @@ function calculateRollingAvg(data: any[], key: string, window = 7) {
 export async function getDiaperStats(babyId: string, start?: string, end?: string) {
   const supabase = await createClient()
 
-  let query = supabase
+  const getBaseQuery = () => {
+      let query = supabase
     .from('baby_events')
     .select('*')
     .eq('baby_id', babyId)
     .eq('category', 'diaper')
     .order('start_time', { ascending: true })
-
-  if (start) query = query.gte('start_time', `${start}T00:00:00`)
-  if (end)   query = query.lte('start_time', `${end}T23:59:59`)
-
-  const { data: events, error } = await query
-
-  if (error) throw new Error(error.message)
+  
+      if (start) query = query.gte('start_time', `${start}T00:00:00`)
+      if (end)   query = query.lte('start_time', `${end}T23:59:59`)
+  
+      return query
+    }
+  
+  const events = await fetchAllRows<any>(getBaseQuery)
   if (!events || events.length === 0) return null
 
   const processed = events.map(ev => {

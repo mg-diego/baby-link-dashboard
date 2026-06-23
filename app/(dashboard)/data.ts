@@ -1,15 +1,17 @@
-import { createClient } from '@/utils/supabase/server'
+import { createClient, fetchAllRows } from '@/utils/supabase/server'
 
 export async function getOverviewStats(babyId: string) {
   const supabase = await createClient()
 
-  const { data: events, error } = await supabase
+  const getBaseQuery = () => {
+    return supabase
     .from('baby_events')
     .select('id, category, start_time, end_time, metadata')
     .eq('baby_id', babyId)
-    .order('start_time', { ascending: true })
-
-  if (error) throw new Error(error.message)
+    .order('start_time', { ascending: true })  
+    }
+  
+  const events = await fetchAllRows<any>(getBaseQuery)
   
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
