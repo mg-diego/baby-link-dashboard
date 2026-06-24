@@ -22,6 +22,10 @@ const quickRanges = [
         range: () => ({ from: subMonths(new Date(), 3), to: new Date() }),
     },
     {
+        label: 'Últimos 6 meses',
+        range: () => ({ from: subMonths(new Date(), 6), to: new Date() }),
+    },
+    {
         label: 'Este mes',
         range: () => ({ from: startOfMonth(new Date()), to: endOfMonth(new Date()) }),
     },

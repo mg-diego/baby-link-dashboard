@@ -27,19 +27,19 @@ export async function getDiaperStats(babyId: string, start?: string, end?: strin
   const supabase = await createClient()
 
   const getBaseQuery = () => {
-      let query = supabase
-    .from('baby_events')
-    .select('*')
-    .eq('baby_id', babyId)
-    .eq('category', 'diaper')
-    .order('start_time', { ascending: true })
-  
-      if (start) query = query.gte('start_time', `${start}T00:00:00`)
-      if (end)   query = query.lte('start_time', `${end}T23:59:59`)
-  
-      return query
-    }
-  
+    let query = supabase
+      .from('baby_events')
+      .select('*')
+      .eq('baby_id', babyId)
+      .eq('category', 'diaper')
+      .order('start_time', { ascending: true })
+
+    if (start) query = query.gte('start_time', `${start}T00:00:00`)
+    if (end) query = query.lte('start_time', `${end}T23:59:59`)
+
+    return query
+  }
+
   const events = await fetchAllRows<any>(getBaseQuery)
   if (!events || events.length === 0) return null
 

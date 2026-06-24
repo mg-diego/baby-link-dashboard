@@ -5,14 +5,14 @@ export async function getOverviewStats(babyId: string) {
 
   const getBaseQuery = () => {
     return supabase
-    .from('baby_events')
-    .select('id, category, start_time, end_time, metadata')
-    .eq('baby_id', babyId)
-    .order('start_time', { ascending: true })  
-    }
-  
+      .from('baby_events')
+      .select('id, category, start_time, end_time, metadata')
+      .eq('baby_id', babyId)
+      .order('start_time', { ascending: true })
+  }
+
   const events = await fetchAllRows<any>(getBaseQuery)
-  
+
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
@@ -49,7 +49,7 @@ export async function getOverviewStats(babyId: string) {
     const start = new Date(safeStart)
     const eventDateStr = `${start.getFullYear()}-${String(start.getMonth() + 1).padStart(2, '0')}-${String(start.getDate()).padStart(2, '0')}`
     const isToday = eventDateStr === todayStr
-    
+
     let meta: any = {}
     if (ev.metadata) {
       if (typeof ev.metadata === 'string') {
@@ -70,7 +70,7 @@ export async function getOverviewStats(babyId: string) {
         duration = Math.round((new Date(safeEnd).getTime() - start.getTime()) / 60000)
         global.totalSleepMins += duration
         if (isToday) today.sleepMins += duration
-        
+
         today.lastSleep = {
           time: start.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }),
           duration: `${Math.floor(duration / 60)}h ${duration % 60}m`,
@@ -110,7 +110,7 @@ export async function getOverviewStats(babyId: string) {
           duration: `${Math.floor(duration / 60)}h ${duration % 60}m`,
           type: 'Noche'
         }
-        
+
         pendingBedTime = null
         pendingWakingsMins = 0
       }
@@ -121,7 +121,7 @@ export async function getOverviewStats(babyId: string) {
       if (isToday) today.feeds += 1
 
       const type = meta.type || 'unknown'
-      
+
       let amountMl = 0
       const rawAmount = meta.amount_ml ?? meta.amount
       if (rawAmount !== undefined && rawAmount !== null) {
@@ -149,7 +149,7 @@ export async function getOverviewStats(babyId: string) {
       if (isToday) today.diapers += 1
 
       const state = String(meta.condition || meta.state || meta.status || meta.type || meta.ui_condition || '').toLowerCase()
-      
+
       if (state.includes('both') || state.includes('mixed') || state.includes('ambos') || state.includes('mixto')) {
         global.diapersBoth += 1
       } else if (state.includes('dirty') || state.includes('poop') || state.includes('sucio') || state.includes('caca')) {
