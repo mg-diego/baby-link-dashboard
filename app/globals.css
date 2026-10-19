@@ -1,7 +1,9 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 @theme {
-  /* Paleta de colores — genera utilidades: bg-primary, text-on-surface, etc. */
+  /* Paleta — genera utilidades: bg-primary, text-on-surface, etc.
+     Mantener sincronizada con `C` en components/charts/theme.ts (recharts necesita hex). */
   --color-primary: #7BB8F0;
   --color-on-primary: #0C447C;
   --color-primary-container: #1A2B45;
@@ -12,8 +14,8 @@
   --color-background: #0F1222;
   --color-outline: #2E3250;
   --color-error: #F09595;
+  --color-muted: #7986CB;
 
-  /* Tipografías */
   --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   --font-mono: var(--font-geist-mono);
 }
@@ -24,61 +26,74 @@
     color: var(--color-on-surface);
     font-family: var(--font-sans);
   }
-
-  :root {
-    --color-primary: #7BB8F0;
-    --color-on-primary: #0C447C;
-    --color-primary-container: #1A2B45;
-    --color-secondary: #B8A0E8;
-    --color-surface: #1A1D2E;
-    --color-on-surface: #E8EAF6;
-    --color-surface-container: #242746;
-    --color-background: #0F1222;
-    --color-outline: #2E3250;
-    --color-error: #F09595;
-  }
-
-  @theme inline {
-    --color-background: var(--background);
-    --color-foreground: var(--foreground);
-    --font-sans: var(--font-geist-sans);
-    --font-mono: var(--font-geist-mono);
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --background: #0a0a0a;
-      --foreground: #ededed;
-    }
-  }
-
-  body {
-    background-color: var(--color-background);
-    color: var(--color-on-surface);
-    font-family: Arial, Helvetica, sans-serif;
-  }  
 }
 
 @layer utilities {
-    .scrollbar-custom {
-      scrollbar-width: thin;
-      scrollbar-color: var(--color-outline) transparent;
-    }
-
-    .scrollbar-custom::-webkit-scrollbar {
-      height: 5px;
-    }
-
-    .scrollbar-custom::-webkit-scrollbar-track {
-      background: transparent;
-    }
-
-    .scrollbar-custom::-webkit-scrollbar-thumb {
-      background-color: var(--color-outline);
-      border-radius: 9999px;
-    }
-
-    .scrollbar-custom::-webkit-scrollbar-thumb:hover {
-      background-color: var(--color-primary);
-    }
+  .scrollbar-custom {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-outline) transparent;
   }
+
+  .scrollbar-custom::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb {
+    background-color: var(--color-outline);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-custom::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-primary);
+  }
+}
+
+/* ── react-day-picker v10 ─────────────────────────────────────────────────── */
+/* Doble clase para ganar en especificidad a react-day-picker/style.css */
+.rdp-root.rdp-dark {
+  --rdp-accent-color: var(--color-primary);
+  --rdp-accent-background-color: var(--color-primary-container);
+  --rdp-day-height: 36px;
+  --rdp-day-width: 36px;
+  --rdp-day_button-height: 34px;
+  --rdp-day_button-width: 34px;
+  --rdp-day_button-border-radius: 8px;
+  --rdp-selected-border: 2px solid var(--color-primary);
+  --rdp-range_middle-color: var(--color-on-surface);
+  --rdp-range_start-color: var(--color-on-primary);
+  --rdp-range_end-color: var(--color-on-primary);
+  --rdp-outside-opacity: 0.35;
+  font-size: 13px;
+  color: var(--color-on-surface);
+}
+
+.rdp-dark .rdp-selected {
+  font-size: inherit;
+  font-weight: 600;
+}
+
+.rdp-dark .rdp-day:not(.rdp-selected) .rdp-day_button:hover:not(:disabled) {
+  background-color: var(--color-outline);
+}
+
+.rdp-dark .rdp-today:not(.rdp-outside) {
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.rdp-dark .rdp-caption_label {
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: capitalize;
+}
+
+.rdp-dark .rdp-weekday {
+  color: var(--color-primary);
+  font-size: 12px;
+  text-transform: capitalize;
+}

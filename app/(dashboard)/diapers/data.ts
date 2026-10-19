@@ -1,98 +1,45 @@
-import { createClient, fetchAllRows } from '@/utils/supabase/server'
+import { getEvents } from '@/lib/events'
+import { classifyDiaper, hasPee, hasPoo } from '@/lib/classify'
+import type { DateRange } from '@/lib/range'
+import { hourlyHistogram, withTrend } from '@/lib/stats'
+import { dateKey, hourDecimal, timeStr } from '@/lib/time'
 
-function classifyDiaper(metadata: any) {
-  const text = [metadata?.condition, metadata?.notes, metadata?.status]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
+export type DiaperStats = NonNullable<Awaited<ReturnType<typeof getDiaperStats>>>
 
-  const hasPee = text.includes('pee') || text.includes('wet')
-  const hasPoo = text.includes('poo') || text.includes('dirty') || text.includes('bm')
+export async function getDiaperStats(range: DateRange) {
+  const events = await getEvents(['diaper'], range)
+  if (events.length === 0) return null
 
-  if (hasPee && hasPoo) return 'Mixed'
-  if (hasPoo) return 'Poo'
-  return 'Pee'
-}
-
-function calculateRollingAvg(data: any[], key: string, window = 7) {
-  return data.map((row, index, arr) => {
-    const start = Math.max(0, index - window + 1)
-    const subset = arr.slice(start, index + 1)
-    const sum = subset.reduce((acc, curr) => acc + curr[key], 0)
-    return { ...row, rolling: sum / subset.length }
-  })
-}
-
-export async function getDiaperStats(babyId: string, start?: string, end?: string) {
-  const supabase = await createClient()
-
-  const getBaseQuery = () => {
-    let query = supabase
-      .from('baby_events')
-      .select('*')
-      .eq('baby_id', babyId)
-      .eq('category', 'diaper')
-      .order('start_time', { ascending: true })
-
-    if (start) query = query.gte('start_time', `${start}T00:00:00`)
-    if (end) query = query.lte('start_time', `${end}T23:59:59`)
-
-    return query
-  }
-
-  const events = await fetchAllRows<any>(getBaseQuery)
-  if (!events || events.length === 0) return null
-
-  const processed = events.map(ev => {
-    const dateObj = new Date(ev.start_time)
-    return {
-      type: classifyDiaper(ev.metadata),
-      dateStr: dateObj.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' }),
-      dateRaw: dateObj.toISOString().split('T')[0],
-      hour: dateObj.getHours(),
-      hourDecimal: dateObj.getHours() + (dateObj.getMinutes() / 60),
-      timeStr: dateObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-    }
-  })
-
-  const uniqueDays = new Set(processed.map(p => p.dateRaw)).size
-  const activeDays = Math.max(uniqueDays, 1)
-
-  const totalPee = processed.filter(p => p.type === 'Pee' || p.type === 'Mixed').length
-  const totalPoo = processed.filter(p => p.type === 'Poo' || p.type === 'Mixed').length
-
-  const kpis = {
-    avgChanges: (processed.length / activeDays).toFixed(1),
-    avgWet: (totalPee / activeDays).toFixed(1),
-    avgDirty: (totalPoo / activeDays).toFixed(1)
-  }
-
-  const compositionMap = new Map()
-  processed.forEach(p => {
-    if (!compositionMap.has(p.dateRaw)) {
-      compositionMap.set(p.dateRaw, { date: p.dateStr, Pee: 0, Mixed: 0, Poo: 0 })
-    }
-    compositionMap.get(p.dateRaw)[p.type] += 1
-  })
-  const dailyComposition = Array.from(compositionMap.values())
-
-  const wetMap = new Map()
-  processed.forEach(p => {
-    if (!wetMap.has(p.dateRaw)) wetMap.set(p.dateRaw, { date: p.dateStr, count: 0 })
-    if (p.type === 'Pee' || p.type === 'Mixed') wetMap.get(p.dateRaw).count += 1
-  })
-  const wetTrends = calculateRollingAvg(Array.from(wetMap.values()), 'count')
-
-  const dirtyEvents = processed.filter(p => p.type === 'Poo' || p.type === 'Mixed')
-
-  const hourlyPoopMap = new Array(24).fill(0).map((_, i) => ({ hour: `${i.toString().padStart(2, '0')}:00`, count: 0 }))
-  dirtyEvents.forEach(p => { hourlyPoopMap[p.hour].count += 1 })
-
-  const poopTimeline = dirtyEvents.map(p => ({
-    date: p.dateStr,
-    hourDecimal: p.hourDecimal,
-    timeStr: p.timeStr
+  const diapers = events.map(ev => ({
+    type: classifyDiaper(ev.meta),
+    date: dateKey(ev.start),
+    hour: ev.start.getHours(),
+    hourDecimal: hourDecimal(ev.start),
+    timeStr: timeStr(ev.start),
   }))
 
-  return { kpis, dailyComposition, wetTrends, hourlyPoop: hourlyPoopMap, poopTimeline }
+  const byDay = new Map<string, { date: string; pee: number; mixed: number; poo: number; wet: number }>()
+  diapers.forEach(d => {
+    const day = byDay.get(d.date) ?? { date: d.date, pee: 0, mixed: 0, poo: 0, wet: 0 }
+    byDay.set(d.date, day)
+    if (d.type !== 'clean') day[d.type]++
+    if (hasPee(d.type)) day.wet++
+  })
+
+  const days = [...byDay.values()]
+  const activeDays = Math.max(days.length, 1)
+  const dirty = diapers.filter(d => hasPoo(d.type))
+
+  return {
+    kpis: {
+      avgChanges: (diapers.length / activeDays).toFixed(1),
+      avgWet: (diapers.filter(d => hasPee(d.type)).length / activeDays).toFixed(1),
+      avgDirty: (dirty.length / activeDays).toFixed(1),
+    },
+    dailyComposition: days,
+    // Media móvil centrada de 7 días
+    wetTrends: withTrend(days, 'wet', 3),
+    hourlyPoop: hourlyHistogram(dirty.map(d => d.hour)),
+    poopTimeline: dirty.map(({ date, hourDecimal, timeStr }) => ({ date, hourDecimal, timeStr })),
+  }
 }

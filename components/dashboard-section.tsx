@@ -1,58 +1,32 @@
 'use client'
 
-import { useState, ReactNode } from 'react'
+import { useState, type ReactNode } from 'react'
+import type { LucideIcon } from 'lucide-react'
 
-// ── Palette Exportada (Para usar en Recharts de cualquier página) ────────────
-export const C = {
-  primary:     '#7BB8F0',
-  secondary:   '#B8A0E8',
-  surface:     '#1A1D2E',
-  surfaceAlt:  '#242746',
-  outline:     '#2E3250',
-  onSurface:   '#E8EAF6',
-  error:       '#F09595',
-  muted:       '#7986CB',
-}
-
-// ── Tooltip genérico exportado ────────────────────────────────────────────────
-export const ChartTooltip = ({ active, payload, label, formatter }: any) => {
-  if (!active || !payload?.length) return null
-  return (
-    <div className="bg-surface border border-outline rounded-xl px-3 py-2 text-xs shadow-xl">
-      <p className="text-onSurface/60 mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color ?? C.primary }}>
-          {p.name}: <span className="font-medium">{formatter ? formatter(p.value, p.name) : p.value}</span>
-        </p>
-      ))}
-    </div>
-  )
-}
-
-// ── KPI Card genérico ─────────────────────────────────────────────────────────
+// ── KPI Card ──────────────────────────────────────────────────────────────────
 export interface KpiProps {
-  icon: any
+  icon: LucideIcon
   label: string
   value: string | number
-  // Permite sobreescribir los colores del icono (ej: "text-error bg-error/20")
-  iconColorClass?: string 
+  /** Colores del icono, p. ej. "text-error bg-error/20" */
+  iconColorClass?: string
 }
 
-export function KpiCard({ icon: Icon, label, value, iconColorClass = "text-primary bg-primary/20" }: KpiProps) {
+export function KpiCard({ icon: Icon, label, value, iconColorClass = 'text-primary bg-primary/20' }: KpiProps) {
   return (
     <div className="bg-surface border border-outline rounded-2xl p-4 flex items-center gap-3">
       <div className={`p-2 rounded-lg shrink-0 ${iconColorClass}`}>
         <Icon size={20} />
       </div>
       <div>
-        <p className="text-xs text-onSurface/50">{label}</p>
-        <p className="text-xl font-semibold text-onSurface">{value}</p>
+        <p className="text-xs text-on-surface/50">{label}</p>
+        <p className="text-xl font-semibold text-on-surface">{value}</p>
       </div>
     </div>
   )
 }
 
-// ── Layout de Sección Principal ───────────────────────────────────────────────
+// ── Layout de sección: título + KPIs + pestañas ──────────────────────────────
 export interface TabDef {
   label: string
   content: ReactNode
@@ -70,28 +44,21 @@ export function DashboardSection({ title, description, kpis, tabs }: DashboardSe
 
   return (
     <div className="space-y-6">
-      
-      {/* 1. Opcional: Título de la página */}
       {(title || description) && (
         <div className="mb-4">
-          {title && <h1 className="text-2xl font-bold text-foreground mb-2">{title}</h1>}
-          {description && <p className="text-onSurfaceVariant">{description}</p>}
+          {title && <h1 className="text-2xl font-bold text-on-surface mb-2">{title}</h1>}
+          {description && <p className="text-on-surface/60">{description}</p>}
         </div>
       )}
 
-      {/* 2. Zona de KPIs */}
       {kpis.length > 0 && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          {kpis.map((kpi, i) => (
-            <KpiCard key={i} {...kpi} />
-          ))}
+          {kpis.map(kpi => <KpiCard key={kpi.label} {...kpi} />)}
         </div>
       )}
 
-      {/* 3. Zona Central con Pestañas */}
       {tabs.length > 0 && (
         <div className="bg-surface border border-outline rounded-2xl overflow-hidden shadow-sm">
-          {/* Navegación de pestañas */}
           <div className="flex border-b border-outline overflow-x-auto">
             {tabs.map((t, i) => (
               <button
@@ -100,7 +67,7 @@ export function DashboardSection({ title, description, kpis, tabs }: DashboardSe
                 className={`flex-1 min-w-[120px] py-3 text-sm font-medium transition-colors ${
                   activeTab === i
                     ? 'text-primary border-b-2 border-primary bg-primary/10'
-                    : 'text-onSurface/50 hover:text-onSurface hover:bg-surface-containerHighest'
+                    : 'text-on-surface/50 hover:text-on-surface hover:bg-surface-container'
                 }`}
               >
                 {t.label}
@@ -108,9 +75,10 @@ export function DashboardSection({ title, description, kpis, tabs }: DashboardSe
             ))}
           </div>
 
-          {/* Contenido inyectado de la pestaña activa */}
           <div className="p-5">
-            {tabs[activeTab].content}
+            <div key={activeTab} className="space-y-8 animate-in fade-in duration-500">
+              {tabs[activeTab].content}
+            </div>
           </div>
         </div>
       )}

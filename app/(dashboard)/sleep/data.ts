@@ -1,41 +1,18 @@
-import { createClient, fetchAllRows } from '@/utils/supabase/server'
+import { type BabyEvent, durationSec, getEvents, groupByCategory, SLEEP_CATEGORIES } from '@/lib/events'
+import type { DateRange } from '@/lib/range'
+import { pairNights } from '@/lib/sleep'
+import { average, groupBy, hourlyHistogram } from '@/lib/stats'
+import {
+  addDays, dateKey, formatAxisDate, formatDuration, formatHour, hourDecimal, parseTimestamp, timeStr,
+} from '@/lib/time'
 
-const TIMEZONE = process.env.NEXT_PUBLIC_TIMEZONE || 'Europe/Madrid'
-
-function toZonedTime(dateString: string): Date {
-  const date = new Date(dateString)
-  const tzString = date.toLocaleString('en-US', { timeZone: TIMEZONE })
-  return new Date(tzString)
-}
-
-function formatDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600)
-  const m = Math.floor((seconds % 3600) / 60)
-  if (h > 0) return `${h}h ${m.toString().padStart(2, '0')}m`
-  return `${m}m`
-}
-
-function toTimeStr(date: Date): string {
-  return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })
-}
-
-function toDateKey(date: Date): string {
-  const y = date.getFullYear()
-  const m = (date.getMonth() + 1).toString().padStart(2, '0')
-  const d = date.getDate().toString().padStart(2, '0')
-  return `${y}-${m}-${d}`
-}
-
-function toDateLabel(date: Date): string {
-  return date.toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
-}
+export type GanttStatus = 'night_solid' | 'night_interrupted' | 'night_waking' | 'nap'
 
 export interface GanttEntry {
   dateKey: string
-  dateLabel: string
   startHour: number
   duration: number
-  status: 'night_solid' | 'night_interrupted' | 'night_waking' | 'nap'
+  status: GanttStatus
   startTimeStr: string
   endTimeStr: string
   durationStr: string
@@ -70,314 +47,204 @@ export interface SleepStats {
   }
 }
 
-function splitAtMidnight(
-  start: Date, end: Date,
-  status: GanttEntry['status'],
-  durationStr: string
-): GanttEntry[] {
-  const entries: GanttEntry[] = []
-  const startDay = toDateKey(start)
-  const endDay = toDateKey(end)
+const MAX_WAKE_WINDOW_SEC = 12 * 3600
 
-  if (startDay === endDay) {
+/** Parte un tramo (horas de pared) en dos si cruza la medianoche. */
+function splitAtMidnight(start: Date, end: Date, status: GanttStatus, durationStr: string): GanttEntry[] {
+  const base = { status, durationStr }
+  const startKey = dateKey(start)
+  const endKey = dateKey(end)
+  const hours = (a: Date, b: Date) => (b.getTime() - a.getTime()) / 3600000
+
+  if (startKey === endKey) {
+    return [{
+      ...base, dateKey: startKey, startHour: hourDecimal(start), duration: hours(start, end),
+      startTimeStr: timeStr(start), endTimeStr: timeStr(end),
+    }]
+  }
+
+  const midnight = new Date(end)
+  midnight.setHours(0, 0, 0, 0)
+  const entries: GanttEntry[] = [{
+    ...base, dateKey: startKey, startHour: hourDecimal(start), duration: hours(start, midnight),
+    startTimeStr: timeStr(start), endTimeStr: '24:00',
+  }]
+  if (hours(midnight, end) > 0.01) {
     entries.push({
-      dateKey: startDay,
-      dateLabel: toDateLabel(start),
-      startHour: start.getHours() + start.getMinutes() / 60,
-      duration: (end.getTime() - start.getTime()) / 3600000,
-      status, startTimeStr: toTimeStr(start), endTimeStr: toTimeStr(end), durationStr
+      ...base, dateKey: endKey, startHour: 0, duration: hours(midnight, end),
+      startTimeStr: '00:00', endTimeStr: timeStr(end),
     })
-  } else {
-    const midnight = new Date(end)
-    midnight.setHours(0, 0, 0, 0)
-    const dur1 = (midnight.getTime() - start.getTime()) / 3600000
-    entries.push({
-      dateKey: startDay, dateLabel: toDateLabel(start),
-      startHour: start.getHours() + start.getMinutes() / 60,
-      duration: dur1, status,
-      startTimeStr: toTimeStr(start), endTimeStr: '24:00', durationStr
-    })
-    const dur2 = (end.getTime() - midnight.getTime()) / 3600000
-    if (dur2 > 0.01) {
-      entries.push({
-        dateKey: endDay, dateLabel: toDateLabel(end),
-        startHour: 0, duration: dur2, status,
-        startTimeStr: '00:00', endTimeStr: toTimeStr(end), durationStr
-      })
-    }
   }
   return entries
 }
 
-export async function getSleepStats(
-  babyId: string,
-  start?: string,
-  end?: string
-): Promise<SleepStats | null> {
-  const supabase = await createClient()
-  const getBaseQuery = () => {
-    let query = supabase
-      .from('baby_events')
-      .select('id, category, start_time, end_time, metadata')
-      .eq('baby_id', babyId)
-      .in('category', ['nap', 'bed_time', 'woke_up', 'night_waking'])
-      .order('start_time', { ascending: true })
+const minutesBetween = (fromMs: number, toMs: number) => Math.round((toMs - fromMs) / 60000)
 
-    if (start) query = query.gte('start_time', `${start}T00:00:00`)
-    if (end) query = query.lte('start_time', `${end}T23:59:59`)
+export async function getSleepStats(range: DateRange): Promise<SleepStats | null> {
+  const events = await getEvents(SLEEP_CATEGORIES, range)
+  if (events.length === 0) return null
 
-    return query
-  }
+  const { nap: naps, bed_time: beds, woke_up: wakeUps, night_waking: nightWakings } = groupByCategory(events)
+  const nights = pairNights(beds, wakeUps, nightWakings)
 
-  const allEvents = await fetchAllRows<any>(getBaseQuery)
+  // ── Predicciones ──
+  const bedtimePredictions: SleepStats['predictions']['bedtime'] = beds
+    .filter(bed => bed.meta.predicted_start_time)
+    .map(bed => ({
+      date: formatAxisDate(dateKey(bed.start)),
+      errorMinutes: minutesBetween(parseTimestamp(bed.meta.predicted_start_time!), bed.startMs),
+    }))
 
-  if (allEvents.length === 0) return null
-
-  const parsed = allEvents.map(e => {
-    let meta: any = {}
-    try { meta = typeof e.metadata === 'string' ? JSON.parse(e.metadata) : (e.metadata || {}) } catch { }
-    return {
-      ...e,
-      metadata: meta,
-      startDate: toZonedTime(e.start_time),
-      endDate: e.end_time ? toZonedTime(e.end_time) : null,
-    }
-  })
-
-  const naps = parsed.filter(e => e.category === 'nap')
-  const wakeUps = parsed.filter(e => e.category === 'woke_up')
-  const bedTimeEvts = parsed.filter(e => e.category === 'bed_time')
-  const nightWakings = parsed.filter(e => e.category === 'night_waking')
-
-  const bedtimePredictions: SleepStats['predictions']['bedtime'] = []
-  const napPredictions: SleepStats['predictions']['naps'] = []
-
-  bedTimeEvts.forEach(bed => {
-    if (bed.metadata?.predicted_start_time) {
-      const predStart = toZonedTime(bed.metadata.predicted_start_time)
-      const errorMinutes = Math.round((bed.startDate.getTime() - predStart.getTime()) / 60000)
-      bedtimePredictions.push({
-        date: toDateLabel(bed.startDate),
-        errorMinutes
-      })
-    }
-  })
-
-  naps.forEach(nap => {
-    if (nap.endDate && nap.metadata?.predicted_start_time && nap.metadata?.predicted_end_time) {
-      const realDuration = Math.round((nap.endDate.getTime() - nap.startDate.getTime()) / 60000)
-      const predStart = toZonedTime(nap.metadata.predicted_start_time)
-      const predEnd = toZonedTime(nap.metadata.predicted_end_time)
-      const predDuration = Math.round((predEnd.getTime() - predStart.getTime()) / 60000)
-      const errorStartMinutes = Math.round((nap.startDate.getTime() - predStart.getTime()) / 60000)
-
-      napPredictions.push({
+  const napPredictions: SleepStats['predictions']['naps'] = naps
+    .filter(nap => nap.endMs !== null && nap.meta.predicted_start_time && nap.meta.predicted_end_time)
+    .map(nap => {
+      const predStartMs = parseTimestamp(nap.meta.predicted_start_time!)
+      const predEndMs = parseTimestamp(nap.meta.predicted_end_time!)
+      return {
         id: nap.id,
-        date: toDateLabel(nap.startDate),
-        timeStr: toTimeStr(nap.startDate),
-        realDuration,
-        predDuration,
-        errorStartMinutes
-      })
-    }
-  })
+        date: formatAxisDate(dateKey(nap.start)),
+        timeStr: timeStr(nap.start),
+        realDuration: minutesBetween(nap.startMs, nap.endMs!),
+        predDuration: minutesBetween(predStartMs, predEndMs),
+        errorStartMinutes: minutesBetween(predStartMs, nap.startMs),
+      }
+    })
 
+  // ── Timeline (gantt) ──
   const ganttEntries: GanttEntry[] = []
+  const pushSegment = (from: Date, to: Date, status: GanttStatus, sec: number) =>
+    ganttEntries.push(...splitAtMidnight(from, to, status, formatDuration(sec)))
 
   naps.forEach(nap => {
-    if (!nap.endDate) return
-    const dur = (nap.endDate.getTime() - nap.startDate.getTime()) / 1000
-    if (dur <= 0) return
-    splitAtMidnight(nap.startDate, nap.endDate, 'nap', formatDuration(dur))
-      .forEach(e => ganttEntries.push(e))
+    const sec = durationSec(nap)
+    if (nap.end && sec !== null && sec > 0) pushSegment(nap.start, nap.end, 'nap', sec)
   })
 
-  const sortedBeds = [...bedTimeEvts].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-  const sortedWakeUps = [...wakeUps].sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-
-  const dailySleepMap = new Map<string, number>()
-
-  sortedBeds.forEach(bed => {
-    const wokeUp = sortedWakeUps.find(w => w.startDate > bed.startDate) ?? null
-    const nightEnd = wokeUp?.startDate ?? null
-
-    const sessionWakings = nightWakings
-      .filter(nw =>
-        nw.startDate > bed.startDate &&
-        (!nightEnd || nw.startDate < nightEnd)
-      )
-      .sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
-
-    const hasWaking = sessionWakings.length > 0
-    const sleepStatus: GanttEntry['status'] = hasWaking ? 'night_interrupted' : 'night_solid'
-
-    let wakingTotalSec = 0
-    sessionWakings.forEach(nw => {
-      if (nw.endDate) wakingTotalSec += (nw.endDate.getTime() - nw.startDate.getTime()) / 1000
-    })
-
-    if (nightEnd) {
-      const nightSleepSec = (nightEnd.getTime() - bed.startDate.getTime()) / 1000 - wakingTotalSec
-      const dateKey = toDateKey(bed.startDate)
-      dailySleepMap.set(dateKey, (dailySleepMap.get(dateKey) ?? 0) + nightSleepSec / 3600)
+  nights.forEach(({ bed, wake, wakings }) => {
+    const status: GanttStatus = wakings.length > 0 ? 'night_interrupted' : 'night_solid'
+    // Tramos de sueño entre despertares
+    let segDate = bed.start
+    let segMs = bed.startMs
+    const sleepUntil = (toDate: Date, toMs: number) => {
+      const sec = (toMs - segMs) / 1000
+      if (sec > 60) pushSegment(segDate, toDate, status, sec)
     }
 
-    let segStart = bed.startDate
-    sessionWakings.forEach(nw => {
-      if (nw.startDate > segStart) {
-        const dur = (nw.startDate.getTime() - segStart.getTime()) / 1000
-        if (dur > 60)
-          splitAtMidnight(segStart, nw.startDate, sleepStatus, formatDuration(dur))
-            .forEach(e => ganttEntries.push(e))
-      }
-      if (nw.endDate) {
-        const wDur = (nw.endDate.getTime() - nw.startDate.getTime()) / 1000
-        if (wDur > 0)
-          splitAtMidnight(nw.startDate, nw.endDate, 'night_waking', formatDuration(wDur))
-            .forEach(e => ganttEntries.push(e))
-        segStart = nw.endDate
+    wakings.forEach(w => {
+      sleepUntil(w.start, w.startMs)
+      const sec = durationSec(w)
+      if (w.end && sec !== null) {
+        if (sec > 0) pushSegment(w.start, w.end, 'night_waking', sec)
+        segDate = w.end
+        segMs = w.endMs!
       }
     })
 
-    if (nightEnd && nightEnd > segStart) {
-      const dur = (nightEnd.getTime() - segStart.getTime()) / 1000
-      if (dur > 60)
-        splitAtMidnight(segStart, nightEnd, sleepStatus, formatDuration(dur))
-          .forEach(e => ganttEntries.push(e))
-    }
+    if (wake) sleepUntil(wake.start, wake.startMs)
   })
 
   ganttEntries.sort((a, b) => a.dateKey.localeCompare(b.dateKey) || a.startHour - b.startHour)
+  const ganttByDate = [...groupBy(ganttEntries, e => e.dateKey)].map(([date, entries]) => ({
+    date,
+    label: formatAxisDate(date),
+    events: entries,
+  }))
 
-  const ganttMap = new Map<string, { date: string; label: string; events: GanttEntry[] }>()
-  ganttEntries.forEach(e => {
-    if (!ganttMap.has(e.dateKey))
-      ganttMap.set(e.dateKey, { date: e.dateKey, label: e.dateLabel, events: [] })
-    ganttMap.get(e.dateKey)!.events.push(e)
-  })
-  const ganttByDate = Array.from(ganttMap.values())
+  // ── Sueño diario (noche por fecha de acostarse + siestas) ──
+  const dailySleepMap = new Map<string, number>()
+  const addSleep = (key: string, hours: number) => dailySleepMap.set(key, (dailySleepMap.get(key) ?? 0) + hours)
 
-  const napsByDate = new Map<string, typeof naps>()
-  naps.forEach(nap => {
-    const dk = toDateKey(nap.startDate)
-    if (!napsByDate.has(dk)) napsByDate.set(dk, [])
-    napsByDate.get(dk)!.push(nap)
-    if (nap.endDate) {
-      const h = (nap.endDate.getTime() - nap.startDate.getTime()) / 3600000
-      dailySleepMap.set(dk, (dailySleepMap.get(dk) ?? 0) + h)
-    }
-  })
+  nights.forEach(n => { if (n.sleepSec !== null) addSleep(dateKey(n.bed.start), n.sleepSec / 3600) })
 
+  const napsByDate = groupBy(naps, nap => dateKey(nap.start))
   const napRaw: SleepStats['napRaw'] = []
   napsByDate.forEach((dayNaps, date) => {
-    dayNaps.sort((a, b) => a.startDate.getTime() - b.startDate.getTime())
     dayNaps.forEach((nap, i) => {
-      if (!nap.endDate) return
+      const sec = durationSec(nap)
+      if (!nap.end || sec === null) return
+      addSleep(date, sec / 3600)
       napRaw.push({
         date,
-        napRank: `Nap ${i + 1}`,
-        durationHours: (nap.endDate.getTime() - nap.startDate.getTime()) / 3600000,
-        startTimeStr: toTimeStr(nap.startDate),
-        endTimeStr: toTimeStr(nap.endDate)
+        napRank: `Siesta ${i + 1}`,
+        durationHours: sec / 3600,
+        startTimeStr: timeStr(nap.start),
+        endTimeStr: timeStr(nap.end),
       })
     })
   })
 
-  const sleepValues = Array.from(dailySleepMap.values())
-  const avgSleep = sleepValues.reduce((a, b) => a + b, 0) / Math.max(sleepValues.length, 1)
-
-  const dailySleep = Array.from(dailySleepMap.entries())
+  const avgSleep = average([...dailySleepMap.values()])
+  const dailySleep = [...dailySleepMap.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([date, totalHours]) => ({ date, totalHours, avg: avgSleep }))
 
-  const wakeUpTimes = wakeUps.map(w => ({
-    date: toDateKey(w.startDate),
-    hourDecimal: w.startDate.getHours() + w.startDate.getMinutes() / 60,
-    timeStr: toTimeStr(w.startDate)
-  })).sort((a, b) => a.date.localeCompare(b.date))
+  const toTimePoint = (e: BabyEvent) => ({ date: dateKey(e.start), hourDecimal: hourDecimal(e.start), timeStr: timeStr(e.start) })
+  const wakeUpTimes = wakeUps.map(toTimePoint)
+  const bedTimes = beds.map(toTimePoint)
 
-  const bedTimes = bedTimeEvts.map(b => ({
-    date: toDateKey(b.startDate),
-    hourDecimal: b.startDate.getHours() + b.startDate.getMinutes() / 60,
-    timeStr: toTimeStr(b.startDate)
-  })).sort((a, b) => a.date.localeCompare(b.date))
+  // ── Ventanas de vigilia ──
+  type Mark = { ms: number; type: 'woke_up' | 'nap_start' | 'nap_end' | 'bed_time' }
+  const marks: (Mark & { date: string })[] = [
+    ...wakeUps.map(w => ({ date: dateKey(w.start), ms: w.startMs, type: 'woke_up' as const })),
+    ...naps.map(n => ({ date: dateKey(n.start), ms: n.startMs, type: 'nap_start' as const })),
+    ...naps.filter(n => n.endMs !== null).map(n => ({ date: dateKey(n.start), ms: n.endMs!, type: 'nap_end' as const })),
+    ...beds.map(b => ({ date: dateKey(b.start), ms: b.startMs, type: 'bed_time' as const })),
+  ]
 
   const wakeWindows: SleepStats['wakeWindows'] = []
-  const allByDay = new Map<string, Array<{ time: Date; type: string }>>()
-
-  wakeUps.forEach(w => { const dk = toDateKey(w.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: w.startDate, type: 'woke_up' }) })
-  naps.forEach(nap => { const dk = toDateKey(nap.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.startDate, type: 'nap_start' }); if (nap.endDate) (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: nap.endDate, type: 'nap_end' }) })
-  bedTimeEvts.forEach(b => { const dk = toDateKey(b.startDate); (allByDay.get(dk) ?? allByDay.set(dk, []).get(dk))!.push({ time: b.startDate, type: 'bed_time' }) })
-
-  allByDay.forEach((evts, date) => {
-    const sorted = evts.sort((a, b) => a.time.getTime() - b.time.getTime())
-    let lastAwake: Date | null = null
+  groupBy(marks, m => m.date).forEach((dayMarks, date) => {
+    dayMarks.sort((a, b) => a.ms - b.ms)
+    let lastAwakeMs: number | null = null
     let counter = 1
-    sorted.forEach(evt => {
-      if (evt.type === 'woke_up') { lastAwake = evt.time; counter = 1 }
-      else if (evt.type === 'nap_start' && lastAwake) {
-        const s = (evt.time.getTime() - lastAwake.getTime()) / 1000
-        if (s > 0 && s < 43200) wakeWindows.push({ date, windowName: `Window ${counter++}`, durationHours: s / 3600, durationStr: formatDuration(s) })
-        lastAwake = null
-      } else if (evt.type === 'nap_end') {
-        lastAwake = evt.time
-      } else if (evt.type === 'bed_time' && lastAwake) {
-        const s = (evt.time.getTime() - lastAwake.getTime()) / 1000
-        if (s > 0 && s < 43200) wakeWindows.push({ date, windowName: 'Last Window', durationHours: s / 3600, durationStr: formatDuration(s) })
-      }
+    const pushWindow = (name: string, untilMs: number) => {
+      const sec = (untilMs - lastAwakeMs!) / 1000
+      if (sec > 0 && sec < MAX_WAKE_WINDOW_SEC)
+        wakeWindows.push({ date, windowName: name, durationHours: sec / 3600, durationStr: formatDuration(sec) })
+    }
+    dayMarks.forEach(m => {
+      if (m.type === 'woke_up') { lastAwakeMs = m.ms; counter = 1 }
+      else if (m.type === 'nap_end') lastAwakeMs = m.ms
+      else if (m.type === 'nap_start' && lastAwakeMs !== null) { pushWindow(`Ventana ${counter++}`, m.ms); lastAwakeMs = null }
+      else if (m.type === 'bed_time' && lastAwakeMs !== null) pushWindow('Última ventana', m.ms)
     })
   })
 
+  // ── Despertares nocturnos (de madrugada cuentan para la noche anterior) ──
   const nightWakingScatter = nightWakings
-    .filter(nw => nw.endDate)
+    .filter(nw => nw.endMs !== null)
     .map(nw => {
-      const dur = (nw.endDate!.getTime() - nw.startDate.getTime()) / 1000
-      const h = nw.startDate.getHours()
-      const dk = h < 12
-        ? toDateKey(new Date(nw.startDate.getTime() - 86400000))
-        : toDateKey(nw.startDate)
-      return { date: dk, hourDecimal: h + nw.startDate.getMinutes() / 60, durationMin: dur / 60, timeStr: toTimeStr(nw.startDate), durationStr: formatDuration(dur) }
+      const sec = durationSec(nw)!
+      const key = dateKey(nw.start)
+      return {
+        date: nw.start.getHours() < 12 ? addDays(key, -1) : key,
+        hourDecimal: hourDecimal(nw.start),
+        durationMin: sec / 60,
+        timeStr: timeStr(nw.start),
+        durationStr: formatDuration(sec),
+      }
     })
     .sort((a, b) => a.date.localeCompare(b.date))
 
-  const nwDayMap = new Map<string, { totalMin: number; count: number }>()
-  nightWakingScatter.forEach(nw => {
-    if (!nwDayMap.has(nw.date)) nwDayMap.set(nw.date, { totalMin: 0, count: 0 })
-    const c = nwDayMap.get(nw.date)!
-    c.totalMin += nw.durationMin; c.count++
-  })
-  const nightWakingsByDay = Array.from(nwDayMap.entries())
+  const nightWakingsByDay = [...groupBy(nightWakingScatter, nw => nw.date)]
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, v]) => ({ date, ...v }))
-
-  const hourMap = new Array(24).fill(0).map((_, i) => ({ hour: `${i.toString().padStart(2, '0')}:00`, count: 0 }))
-  nightWakings.forEach(nw => hourMap[nw.startDate.getHours()].count++)
-
-  const avgWakeH = wakeUpTimes.length > 0
-    ? wakeUpTimes.reduce((s, w) => s + w.hourDecimal, 0) / wakeUpTimes.length : 0
-  const avgBedH = bedTimes.length > 0
-    ? bedTimes.reduce((s, b) => s + b.hourDecimal, 0) / bedTimes.length : 0
-  const pad = (n: number) => n.toString().padStart(2, '0')
-  const formatTime = (decimalH: number) => {
-    const totalMin = Math.round(decimalH * 60)
-    const h = Math.floor(totalMin / 60) % 24
-    const m = totalMin % 60
-    return `${pad(h)}:${pad(m)}`
-  }
+    .map(([date, list]) => ({ date, totalMin: list.reduce((s, nw) => s + nw.durationMin, 0), count: list.length }))
 
   return {
     kpis: {
       avgTotalSleep: `${avgSleep.toFixed(1)}h`,
-      avgWakeTime: formatTime(avgWakeH),
-      avgBedTime: formatTime(avgBedH),
-      avgNightWakings: (nightWakings.length / Math.max(sortedBeds.length, 1)).toFixed(1)
+      avgWakeTime: formatHour(average(wakeUpTimes.map(w => w.hourDecimal))),
+      avgBedTime: formatHour(average(bedTimes.map(b => b.hourDecimal))),
+      avgNightWakings: (nightWakings.length / Math.max(beds.length, 1)).toFixed(1),
     },
-    ganttByDate, dailySleep, wakeUpTimes, bedTimes,
-    napRaw, wakeWindows, nightWakingsByDay, nightWakingScatter,
-    cursedHour: hourMap,
-    predictions: {
-      bedtime: bedtimePredictions,
-      naps: napPredictions
-    }
+    ganttByDate,
+    dailySleep,
+    wakeUpTimes,
+    bedTimes,
+    napRaw,
+    wakeWindows,
+    nightWakingsByDay,
+    nightWakingScatter,
+    cursedHour: hourlyHistogram(nightWakings.map(nw => nw.start.getHours())),
+    predictions: { bedtime: bedtimePredictions, naps: napPredictions },
   }
 }
